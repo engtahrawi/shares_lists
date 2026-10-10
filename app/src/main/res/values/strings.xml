@@ -3,4 +3,27 @@
     <string name="app_name">Welcome Abdallah</string>
     <string name="welcome">Welcome Abdallah</string>
     <string name="subtitle">Glad to have you here</string>
+
+    <string name="share_label">Save to Links</string>
+    <string name="home_title">My Links</string>
+    <string name="search_hint">Search links</string>
+    <string name="empty_title">No links yet</string>
+    <string name="empty_body">In any app, tap Share and choose \"Save to Links\". Everything you share will appear here.</string>
+    <plurals name="link_count">
+        <item quantity="one">%d saved link</item>
+        <item quantity="other">%d saved links</item>
+    </plurals>
+    <string name="meta_with_source">From %1$s · %2$s</string>
+
+    <string name="link_saved">Saved to Links</string>
+    <string name="link_already_saved">Already saved, moved to top</string>
+    <string name="no_link_found">No link found in the shared text</string>
+    <string name="cannot_open">No app can open this link</string>
+    <string name="copied">Link copied</string>
+    <string name="delete_confirm">Delete this link?</string>
+
+    <string name="action_open">Open</string>
+    <string name="action_share">Share</string>
+    <string name="action_copy">Copy link</string>
+    <string name="action_delete">Delete</string>
 </resources>
