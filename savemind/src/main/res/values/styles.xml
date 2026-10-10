@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">#2446E0</item>
+        <item name="android:colorPrimaryDark">#F5F6F8</item>
+        <item name="android:colorAccent">#2446E0</item>
+        <item name="android:statusBarColor">#F5F6F8</item>
+        <item name="android:navigationBarColor">#FFFFFF</item>
+        <item name="android:windowBackground">@color/bg</item>
+    </style>
+
+    <style name="ShareTheme" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:backgroundDimAmount">0.55</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.InputMethod</item>
+        <item name="android:colorAccent">#2446E0</item>
+        <item name="android:navigationBarColor">#FFFFFF</item>
+    </style>
+
+    <color name="bg">#F5F6F8</color>
+    <color name="ink">#16181D</color>
+    <color name="muted">#4A4F5C</color>
+    <color name="blue">#2446E0</color>
+</resources>

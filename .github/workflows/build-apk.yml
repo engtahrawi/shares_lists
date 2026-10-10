@@ -49,21 +49,27 @@ jobs:
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: gradle assembleRelease --no-daemon
 
-      - name: Rename APK
+      - name: Rename APKs
         if: steps.keystore.outputs.signed == 'true'
-        run: cp app/build/outputs/apk/release/app-release.apk WelcomeAbdallah.apk
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk WelcomeAbdallah.apk
+          cp savemind/build/outputs/apk/release/savemind-release.apk SaveMind.apk
 
       - uses: actions/upload-artifact@v4
         if: steps.keystore.outputs.signed == 'true'
         with:
-          name: WelcomeAbdallah-apk
-          path: WelcomeAbdallah.apk
+          name: apks
+          path: |
+            WelcomeAbdallah.apk
+            SaveMind.apk
 
       - name: Publish release
         if: steps.keystore.outputs.signed == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: Welcome Abdallah build ${{ github.run_number }}
+          name: Build ${{ github.run_number }} (Welcome Abdallah + SaveMind)
           target_commitish: ${{ github.sha }}
-          files: WelcomeAbdallah.apk
+          files: |
+            WelcomeAbdallah.apk
+            SaveMind.apk

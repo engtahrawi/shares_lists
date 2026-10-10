@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SaveMind</string>
+    <string name="share_label">SaveMind</string>
+    <string name="saved_title">Saved to SaveMind</string>
+    <string name="saved_sub">Analyzing in the background</string>
+    <string name="dup_title">Already in SaveMind</string>
+    <string name="no_link_title">No link found</string>
+    <string name="no_link_sub">SaveMind saves links. Share a post or page that contains a URL.</string>
+    <string name="queued">Queued for analysis</string>
+    <string name="add_note">Add a note</string>
+    <string name="done">Done</string>
+    <string name="note_hint">Why are you saving this?</string>
+    <string name="view_existing">View existing</string>
+    <string name="save_copy">Save copy</string>
+</resources>
