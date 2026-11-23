@@ -24,6 +24,11 @@ Save links from any app, then let Claude brief, tag and file them.
   guessing one). It shows as its own block on the link, color-coded by how close it is, and the nearest three
   appear under **Upcoming deadlines** on Home. You can set, correct or remove a deadline (yours is never
   overwritten) and get a reminder notification 3 days or 1 week before.
+- **Planner** (its own tab): every open opportunity in the order to work on it. Claude estimates the days of
+  work and lists the preparation steps; *Start by* = deadline minus the estimate minus one buffer day, and the
+  list is grouped into Start today, This week, Later and Missed. A warning appears when the work due by a date
+  exceeds the days left. On each opportunity a collapsible **Your plan** section holds the estimate (editable)
+  and a checklist of steps. Home shows the first three under **Up next**; Search moved to the top of Home.
 - **Home** shows only collections that hold links; empty ones stay in the Collections tab.
 - **Collections**, **Favorites**, **Archive**, **Search** (title, brief, tags, URL, collection, notes;
   Arabic-aware) with source and status filters, **Retry** and **Add context** for failed analyses.

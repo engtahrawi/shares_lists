@@ -18,7 +18,7 @@ import java.nio.charset.StandardCharsets;
  */
 final class ClaudeClient {
 
-    static final String PROMPT_VERSION = "savemind-analysis-v2";
+    static final String PROMPT_VERSION = "savemind-analysis-v3";
 
     private static final String API = "https://api.anthropic.com/v1/messages";
     private static final String MODELS_API = "https://api.anthropic.com/v1/models/";
@@ -76,7 +76,13 @@ final class ClaudeClient {
                     + "material states one explicitly. Format YYYY-MM-DD, or YYYY-MM-DDTHH:MM when a time is "
                     + "given (local time as stated). Resolve relative dates such as \"this Friday\" against "
                     + "<today>. An event's start date is not a deadline unless registration closes then. Use "
-                    + "an empty string when no deadline is stated; never guess one.";
+                    + "an empty string when no deadline is stated; never guess one.\n"
+                    + "- effort_days: when there is a deadline, a realistic estimate of the working days an "
+                    + "applicant needs to prepare (1 for a simple form or registration, more for proposals, "
+                    + "letters or documents to gather), from 1 to 30; 0 when there is no deadline.\n"
+                    + "- prep_steps: when there is a deadline, 2 to 6 short, concrete preparation steps drawn "
+                    + "from the stated requirements (each under 70 characters, imperative, in the summary's "
+                    + "language); an empty list when there is no deadline or the requirements are unknown.";
 
     /** Validated analysis output. */
     static final class Analysis {
@@ -95,6 +101,8 @@ final class ClaudeClient {
         String servedModel;
         /** "YYYY-MM-DD", "YYYY-MM-DDTHH:MM" or null. */
         String deadline;
+        int effortDays;
+        JSONArray steps = new JSONArray();
     }
 
     static final class ClaudeException extends Exception {
@@ -170,6 +178,8 @@ final class ClaudeClient {
         props.put("confidence", new JSONObject().put("type", "number"));
         props.put("content_sufficient", new JSONObject().put("type", "boolean"));
         props.put("deadline", new JSONObject().put("type", "string"));
+        props.put("effort_days", new JSONObject().put("type", "integer"));
+        props.put("prep_steps", new JSONObject().put("type", "array").put("items", new JSONObject().put("type", "string")));
         schema.put("properties", props);
         JSONArray required = new JSONArray();
         java.util.Iterator<String> keys = props.keys();
@@ -307,6 +317,15 @@ final class ClaudeClient {
             a.contentSufficient = o.optBoolean("content_sufficient", true);
             String deadline = o.optString("deadline", "").trim();
             a.deadline = Deadlines.parse(deadline) != null ? deadline : null;
+            int effort = o.optInt("effort_days", 0);
+            a.effortDays = a.deadline == null ? 0 : Math.max(0, Math.min(30, effort));
+            JSONArray steps = o.optJSONArray("prep_steps");
+            if (a.deadline != null && steps != null) {
+                for (int i = 0; i < steps.length() && a.steps.length() < 6; i++) {
+                    String st = clip(steps.optString(i, ""), 90);
+                    if (!st.isEmpty()) a.steps.put(st);
+                }
+            }
 
             JSONObject usage = resp.optJSONObject("usage");
             if (usage != null) {

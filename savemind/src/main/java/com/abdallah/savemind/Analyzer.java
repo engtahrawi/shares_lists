@@ -147,6 +147,8 @@ final class Analyzer {
                 }
             }
 
+            applyPlan(link, a, v);
+
             boolean reviewed = link.optLong("reviewed") == 1;
             if (a.suggestedCollectionId > 0) {
                 v.put("suggested_collection_id", a.suggestedCollectionId);
@@ -184,6 +186,34 @@ final class Analyzer {
             db.updateLink(id, v);
             db.logRun(id, model, ClaudeClient.PROMPT_VERSION, page.level, "error", e.code, 0, 0,
                     System.currentTimeMillis() - started);
+        }
+    }
+
+    /** Work estimate and steps from the analysis, unless the user has edited them. Done ticks are kept. */
+    private static void applyPlan(JSONObject link, ClaudeClient.Analysis a, ContentValues v) {
+        if (link.optLong("effort_locked") == 0) {
+            if (a.effortDays > 0) v.put("effort_days", a.effortDays);
+            else v.putNull("effort_days");
+        }
+        if (link.optLong("steps_locked") == 0) {
+            JSONArray old = link.optJSONArray("steps");
+            JSONArray next = new JSONArray();
+            for (int i = 0; i < a.steps.length(); i++) {
+                String text = a.steps.optString(i);
+                int done = 0;
+                if (old != null) {
+                    for (int j = 0; j < old.length(); j++) {
+                        JSONObject o = old.optJSONObject(j);
+                        if (o != null && text.equalsIgnoreCase(o.optString("t"))) done = o.optInt("d");
+                    }
+                }
+                try {
+                    next.put(new JSONObject().put("t", text).put("d", done));
+                } catch (org.json.JSONException ignored) {
+                    // not reachable
+                }
+            }
+            v.put("steps", next.toString());
         }
     }
 

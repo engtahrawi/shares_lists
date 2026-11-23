@@ -33,7 +33,8 @@ final class Db extends SQLiteOpenHelper {
             "confidence", "reviewed", "favorite", "archived", "notes", "error", "attempts",
             "next_attempt_at", "site_name", "image_url", "analyzed_at", "title_locked",
             "tags_locked", "action_locked", "page_title", "deadline_at", "deadline_has_time",
-            "deadline_source", "deadline_locked", "remind_days", "reminded"
+            "deadline_source", "deadline_locked", "remind_days", "reminded", "effort_days",
+            "effort_locked", "steps", "steps_locked"
     };
 
     private static Db instance;
@@ -44,7 +45,7 @@ final class Db extends SQLiteOpenHelper {
     }
 
     private Db(Context context) {
-        super(context, "savemind.db", null, 2);
+        super(context, "savemind.db", null, 3);
     }
 
     @Override
@@ -90,6 +91,7 @@ final class Db extends SQLiteOpenHelper {
                 + "tags_locked INTEGER NOT NULL DEFAULT 0,"
                 + "action_locked INTEGER NOT NULL DEFAULT 0)");
         addDeadlineColumns(db);
+        addPlanColumns(db);
         db.execSQL("CREATE INDEX idx_links_norm ON links(normalized_url)");
         db.execSQL("CREATE INDEX idx_links_status ON links(status)");
         db.execSQL("CREATE TABLE analysis_runs ("
@@ -109,6 +111,15 @@ final class Db extends SQLiteOpenHelper {
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         if (oldVersion < 2) addDeadlineColumns(db);
+        if (oldVersion < 3) addPlanColumns(db);
+    }
+
+    /** Version 3: the Planner's work estimate (days) and preparation steps ([{"t":text,"d":0|1}]). */
+    private static void addPlanColumns(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE links ADD COLUMN effort_days INTEGER");
+        db.execSQL("ALTER TABLE links ADD COLUMN effort_locked INTEGER NOT NULL DEFAULT 0");
+        db.execSQL("ALTER TABLE links ADD COLUMN steps TEXT NOT NULL DEFAULT '[]'");
+        db.execSQL("ALTER TABLE links ADD COLUMN steps_locked INTEGER NOT NULL DEFAULT 0");
     }
 
     /** Version 2: deadlines. deadline_at is epoch ms; a date without a time is stored as 23:59 local. */
@@ -206,6 +217,12 @@ final class Db extends SQLiteOpenHelper {
                     default:
                         o.put(name, c.getString(i));
                 }
+            }
+            String steps = o.optString("steps", "[]");
+            try {
+                o.put("steps", new JSONArray(steps));
+            } catch (JSONException e) {
+                o.put("steps", new JSONArray());
             }
             String tags = o.optString("tags", "[]");
             try {
@@ -317,6 +334,21 @@ final class Db extends SQLiteOpenHelper {
             c.close();
         }
         return out;
+    }
+
+    /** Open links with a future deadline but no work estimate, for a one-tap re-analysis. */
+    int requeueMissingPlans() {
+        ContentValues v = new ContentValues();
+        v.put("status", ST_QUEUED);
+        v.put("attempts", 0);
+        v.put("next_attempt_at", 0);
+        v.putNull("error");
+        int n = getWritableDatabase().update("links", v,
+                "deadline_at IS NOT NULL AND deadline_at > ? AND effort_days IS NULL AND archived = 0 "
+                        + "AND status IN ('analyzed', 'partial', 'failed')",
+                new String[]{String.valueOf(System.currentTimeMillis())});
+        if (n > 0) ChangeBus.post();
+        return n;
     }
 
     // ---------------------------------------------------------- collections

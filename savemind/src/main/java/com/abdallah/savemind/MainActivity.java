@@ -462,6 +462,47 @@ public class MainActivity extends Activity {
             return true;
         }
 
+        /** Sets the work estimate in days (1 to 60); never overwritten by a later analysis. */
+        @JavascriptInterface
+        public void setEffort(long id, int days) {
+            if (days < 1 || days > 60) return;
+            ContentValues v = new ContentValues();
+            v.put("effort_days", days);
+            v.put("effort_locked", 1);
+            db().updateLink(id, v);
+        }
+
+        /** Replaces the preparation steps ([{"t":text,"d":0|1}]); never overwritten by a later analysis. */
+        @JavascriptInterface
+        public void setSteps(long id, String json) {
+            try {
+                JSONArray in = new JSONArray(json);
+                JSONArray clean = new JSONArray();
+                for (int i = 0; i < in.length() && clean.length() < 20; i++) {
+                    JSONObject o = in.optJSONObject(i);
+                    if (o == null) continue;
+                    String t = o.optString("t").trim();
+                    if (t.isEmpty()) continue;
+                    if (t.length() > 120) t = t.substring(0, 120);
+                    clean.put(new JSONObject().put("t", t).put("d", o.optInt("d") == 1 ? 1 : 0));
+                }
+                ContentValues v = new ContentValues();
+                v.put("steps", clean.toString());
+                v.put("steps_locked", 1);
+                db().updateLink(id, v);
+            } catch (JSONException ignored) {
+                // malformed input from the page is ignored
+            }
+        }
+
+        /** Re-analyzes open opportunities that have a deadline but no work estimate yet. */
+        @JavascriptInterface
+        public int reanalyzeMissingPlans() {
+            int n = db().requeueMissingPlans();
+            if (n > 0) Analyzer.kick(MainActivity.this);
+            return n;
+        }
+
         /** Removes the deadline and keeps it removed on re-analysis. */
         @JavascriptInterface
         public void clearDeadline(long id) {

@@ -207,3 +207,27 @@ textarea.inp { height: auto; min-height: 96px; padding: 12px 14px; resize: none;
 .dblock.urgent .dlabel { color: var(--red); }
 .dblock.soon .dlabel { color: var(--amber); }
 .dblock .dfull { font-family: var(--display); font-size: 19px; font-weight: 700; }
+
+/* Planner */
+.glabel { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; margin-bottom: -6px; }
+.prow { display: flex; gap: 12px; padding: 12px 14px; border: 0; background: none; text-align: start; width: 100%; border-bottom: 1px solid var(--line); align-items: flex-start; }
+.prow:last-child { border-bottom: 0; }
+.pnum { width: 28px; height: 28px; border-radius: 50%; background: var(--soft); color: var(--ink); font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none; }
+.pnum.on { background: var(--ink); color: #fff; }
+.pbar { flex: 1; height: 6px; border-radius: 3px; background: var(--soft); overflow: hidden; min-width: 40px; }
+.pbar > div { height: 100%; background: var(--blue); }
+.plan { background: #fff; border-radius: 18px; box-shadow: 0 1px 2px rgba(22,24,29,.06); display: flex; flex-direction: column; }
+.phead { border: 0; background: none; text-align: start; padding: 14px; display: flex; align-items: center; gap: 12px; width: 100%; }
+.phead .t { font-size: 15px; }
+.phead .pbar { flex: none; width: 100%; }
+.chev { width: 36px; height: 36px; border-radius: 50%; background: var(--soft); display: flex; align-items: center; justify-content: center; flex: none; transition: transform .15s; }
+.chev.open { transform: rotate(180deg); }
+.pbody { padding: 12px 14px 10px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; }
+.ptile { border: 0; background: var(--bg); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; text-align: start; }
+.ptile .pv { font-family: var(--display); font-size: 18px; font-weight: 700; }
+.pstep { display: flex; align-items: center; gap: 10px; min-height: 44px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.pstep:last-child { border-bottom: 0; }
+.pstep.done .grow { color: var(--muted-2); text-decoration: line-through; }
+.pcheck { width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--line-2); background: #fff; color: #fff; font-size: 13px; font-weight: 800; display: flex; align-items: center; justify-content: center; padding: 0; flex: none; }
+.pcheck.on { background: var(--blue); border-color: var(--blue); }
+.pdel { border: 0; background: none; color: var(--muted-2); font-size: 20px; width: 32px; height: 32px; flex: none; }

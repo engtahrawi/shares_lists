@@ -29,6 +29,9 @@
     heart: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>',
     heartOn: '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>',
     check: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>',
+    planner: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4M8 14h3M8 17h6"/></svg>',
+    chevron: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
+    searchSm: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>',
     link: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>'
   };
 
@@ -39,6 +42,8 @@
   var dirty = false;
   var searchState = { q: '', filter: 'all' };
   var addState = { url: '', context: '', copy: false, dup: null, error: '' };
+  var planOpen = {};
+  var showMissed = false;
   var callbacks = {};
   var callbackSeq = 1;
 
@@ -192,6 +197,189 @@
       + '<button class="btn sec" style="min-height:36px;padding:0 12px;align-self:flex-start" data-act="deadline" data-id="' + l.id + '" aria-label="Edit deadline">Edit</button></section>';
   }
 
+  // ---------------------------------------------------------------- planner
+
+  var DAY = 86400000;
+  function stepsOf(l) { return Array.isArray(l.steps) ? l.steps : []; }
+  function stepsDone(l) { return stepsOf(l).filter(function (x) { return x.d; }).length; }
+  function shortDate(ms) { var d = new Date(ms); return d.getDate() + ' ' + MONTHS[d.getMonth()]; }
+
+  /**
+   * Plan for one opportunity. Start by = deadline day minus the work estimate minus 1 buffer day.
+   * Groups: today (start by is today or earlier), week (within 7 days), later, missed (deadline passed).
+   */
+  function planOf(l) {
+    if (!hasDeadline(l)) return null;
+    var known = !!l.effort_days;
+    var effort = known ? l.effort_days : 1;
+    var d = new Date(startOfDay(l.deadline_at));
+    d.setDate(d.getDate() - (effort + 1));
+    var startBy = d.getTime();
+    var today = startOfDay(Date.now());
+    var steps = stepsOf(l), done = stepsDone(l);
+    var group = l.deadline_at < Date.now() ? 'missed' : startBy <= today ? 'today' : startBy < today + 7 * DAY ? 'week' : 'later';
+    var remaining = steps.length ? effort * (1 - done / steps.length) : effort;
+    return { known: known, effort: effort, startBy: startBy, group: group, steps: steps, done: done, remaining: remaining };
+  }
+
+  function plannerItems() {
+    return S.links.filter(function (l) { return !l.archived && hasDeadline(l); })
+      .map(function (l) { return { l: l, p: planOf(l) }; });
+  }
+
+  /** Open opportunities in the suggested working order. */
+  function plannerOrder() {
+    return plannerItems().filter(function (x) { return x.p.group !== 'missed'; })
+      .sort(function (a, b) { return a.p.startBy - b.p.startBy || a.l.deadline_at - b.l.deadline_at; });
+  }
+
+  function startChip(p) {
+    if (p.group === 'missed') return '<span class="dchip closed">Closed</span>';
+    if (p.group === 'today') return '<span class="dchip urgent">Start today</span>';
+    return '<span class="dchip ' + (p.group === 'week' ? 'soon' : '') + '">Start ' + esc(shortDate(p.startBy)) + '</span>';
+  }
+
+  function effortText(p) {
+    return p.known ? 'about ' + p.effort + ' day' + (p.effort === 1 ? '' : 's') + ' of work' : 'work not estimated yet';
+  }
+
+  /** First point where the remaining work due by a deadline exceeds the days left before it. */
+  function overload(order) {
+    var byDeadline = order.slice().sort(function (a, b) { return a.l.deadline_at - b.l.deadline_at; });
+    var today = startOfDay(Date.now()), need = 0, involved = [];
+    for (var i = 0; i < byDeadline.length; i++) {
+      var x = byDeadline[i];
+      need += x.p.remaining;
+      involved.push(x);
+      var have = Math.max(0, Math.round((startOfDay(x.l.deadline_at) - today) / DAY));
+      if (need > have + 0.01) return { until: x.l.deadline_at, need: Math.ceil(need), have: have, items: involved.slice() };
+    }
+    return null;
+  }
+
+  function planRow(x, n) {
+    var l = x.l, p = x.p;
+    var h = '<button class="prow" data-act="open" data-id="' + l.id + '"><span class="pnum' + (p.group === 'today' ? ' on' : '') + '">' + n + '</span>'
+      + '<div class="col grow" style="gap:5px"><div class="row between" style="align-items:flex-start"><p class="t" dir="auto">' + esc(titleOf(l)) + '</p>' + startChip(p) + '</div>'
+      + '<span class="src">Closes ' + esc(shortDate(l.deadline_at)) + ' · ' + effortText(p) + '</span>';
+    if (p.steps.length) {
+      h += '<div class="row"><div class="pbar"><div style="width:' + Math.round(100 * p.done / p.steps.length) + '%"></div></div>'
+        + '<span class="src" style="font-weight:600">' + p.done + ' of ' + p.steps.length + ' steps</span></div>';
+    }
+    return h + '</div></button>';
+  }
+
+  function upNextRow(x) {
+    var l = x.l, p = x.p;
+    var sub = p.known ? 'About ' + p.effort + ' day' + (p.effort === 1 ? '' : 's') + ' of work' : 'Work not estimated yet';
+    if (p.steps.length) sub += ' · ' + p.done + ' of ' + p.steps.length + ' steps';
+    return '<button class="drow" data-act="open" data-id="' + l.id + '">' + dateTile(l, false)
+      + '<div class="col grow"><p class="t clamp2" dir="auto">' + esc(titleOf(l)) + '</p><span class="src">' + esc(sub) + '</span></div>'
+      + startChip(p) + '</button>';
+  }
+
+  function viewPlanner() {
+    var items = plannerItems();
+    var order = plannerOrder();
+    var missed = items.filter(function (x) { return x.p.group === 'missed'; })
+      .sort(function (a, b) { return b.l.deadline_at - a.l.deadline_at; });
+    var total = 0;
+    order.forEach(function (x) { if (x.p.known) total += x.p.effort; });
+    var h = '<div class="body"><div class="col" style="gap:2px"><h1 class="h1">Planner</h1>'
+      + '<span class="s">' + order.length + ' open opportunit' + (order.length === 1 ? 'y' : 'ies')
+      + (total ? ' · about ' + total + ' days of work' : '') + '</span></div>';
+
+    if (!items.length) {
+      return h + '<div class="empty"><div class="big">' + I.planner + '</div><p class="t">No deadlines yet</p>'
+        + '<p class="s">When Claude finds a closing date in a saved opportunity, it appears here in the order you should work on it. You can also set a deadline on any link.</p></div></div>';
+    }
+
+    var today = order.filter(function (x) { return x.p.group === 'today'; });
+    var now = new Date();
+    var focus;
+    if (today.length) {
+      var first = today[0];
+      focus = 'Begin with ' + titleOf(first.l) + ': ' + effortText(first.p) + ', closes ' + shortDate(first.l.deadline_at) + '.';
+    } else if (order.length) {
+      focus = 'Next: ' + titleOf(order[0].l) + ', start by ' + shortDate(order[0].p.startBy) + '.';
+    } else {
+      focus = 'Every saved deadline has passed.';
+    }
+    h += '<div class="hero" style="flex-direction:column;align-items:flex-start;gap:4px"><p class="k">Today · ' + WEEKDAYS[now.getDay()] + ' ' + now.getDate() + ' ' + MONTHS[now.getMonth()] + '</p>'
+      + '<p class="v" style="font-size:22px">' + (today.length ? today.length + ' to start today' : 'Nothing to start today') + '</p>'
+      + '<p class="k" style="opacity:.85;line-height:1.4" dir="auto">' + esc(focus) + '</p></div>';
+
+    var unknown = order.filter(function (x) { return !x.p.known; }).length;
+    if (unknown) {
+      h += '<div class="card" style="gap:8px"><p class="t">' + unknown + ' opportunit' + (unknown === 1 ? 'y has' : 'ies have') + ' no work estimate yet</p>'
+        + '<p class="s">They were saved before the Planner existed, so they are ordered as if they need 1 day. Claude can estimate the work and list the steps.</p>'
+        + '<button class="btn sec" data-act="planReanalyze">Analyze ' + (unknown === 1 ? 'it' : 'them') + '</button></div>';
+    }
+
+    var over = overload(order);
+    if (over) {
+      var biggest = over.items.slice().sort(function (a, b) { return b.p.remaining - a.p.remaining; })[0];
+      var msg = over.items.length === 1
+        ? titleOf(biggest.l) + ' needs about ' + over.need + ' days of work, but only ' + over.have + ' remain before it closes. Start now, or consider skipping it.'
+        : over.items.length + ' opportunities closing by ' + shortDate(over.until) + ' need about ' + over.need + ' days of work, but only ' + over.have
+          + ' remain. Start ' + titleOf(biggest.l) + ' now, or skip one of them.';
+      h += '<div class="notice" role="note"><p class="t">Busy until ' + esc(shortDate(over.until)) + '</p><p class="s" dir="auto">' + esc(msg) + '</p></div>';
+    }
+
+    var n = 0;
+    [['today', 'Start today', 'var(--red)'], ['week', 'This week', 'var(--amber)'], ['later', 'Later', 'var(--muted-2)']].forEach(function (g) {
+      var list = order.filter(function (x) { return x.p.group === g[0]; });
+      if (!list.length) return;
+      h += '<span class="glabel" style="color:' + g[2] + '">' + g[1] + '</span><div class="dlist">'
+        + list.map(function (x) { n++; return planRow(x, n); }).join('') + '</div>';
+    });
+
+    if (missed.length) {
+      h += '<button class="link" style="text-align:start;color:var(--muted-2)" data-act="toggleMissed">' + (showMissed ? '▾' : '▸') + ' Missed (' + missed.length + ')</button>';
+      if (showMissed) {
+        h += '<div class="dlist">' + missed.map(function (x) {
+          return '<button class="prow" data-act="open" data-id="' + x.l.id + '"><span class="pnum">·</span><div class="col grow" style="gap:3px"><div class="row between"><p class="t" dir="auto">'
+            + esc(titleOf(x.l)) + '</p>' + startChip(x.p) + '</div><span class="src">Closed ' + esc(shortDate(x.l.deadline_at)) + '</span></div></button>';
+        }).join('') + '</div>';
+      }
+    }
+    return h + '</div>';
+  }
+
+  function planSection(l) {
+    var p = planOf(l);
+    if (!p || p.group === 'missed') return '';
+    var open = !!planOpen[l.id];
+    var summary = (p.known ? 'About ' + p.effort + ' day' + (p.effort === 1 ? '' : 's') + ' of work' : 'Work not estimated yet')
+      + (p.steps.length ? ' · ' + p.done + ' of ' + p.steps.length + ' steps done' : '');
+    var h = '<section class="plan" aria-label="Your plan"><button class="phead" data-act="planToggle" data-id="' + l.id + '" aria-expanded="' + open + '">'
+      + '<div class="col grow" style="gap:6px"><div class="row"><span class="t">Your plan</span>' + startChip(p) + '</div>'
+      + '<span class="s">' + esc(summary) + '</span>'
+      + (p.steps.length ? '<div class="pbar"><div style="width:' + Math.round(100 * p.done / p.steps.length) + '%"></div></div>' : '')
+      + '</div><span class="chev' + (open ? ' open' : '') + '">' + I.chevron + '</span></button>';
+    if (open) {
+      h += '<div class="pbody"><div class="grid2">'
+        + '<button class="ptile" data-act="editEffort" data-id="' + l.id + '"><span class="src" style="font-weight:600">Work needed</span>'
+        + '<span class="pv">' + (p.known ? 'About ' + p.effort + ' day' + (p.effort === 1 ? '' : 's') : 'Not estimated') + '</span>'
+        + '<span class="src" style="font-size:11px">' + (l.effort_locked ? 'Set by you' : p.known ? 'Estimated by Claude' : 'Tap to set') + ' · Edit</span></button>'
+        + '<div class="ptile"><span class="src" style="font-weight:600">Start by</span><span class="pv">'
+        + (p.group === 'today' ? 'Today, ' + shortDate(Date.now()) : WEEKDAYS[new Date(p.startBy).getDay()].slice(0, 3) + ', ' + shortDate(p.startBy))
+        + '</span><span class="src" style="font-size:11px">Includes 1 buffer day</span></div></div>';
+      if (p.steps.length) {
+        h += '<div class="col" style="gap:0">' + p.steps.map(function (st, i) {
+          return '<div class="pstep' + (st.d ? ' done' : '') + '"><button class="pcheck' + (st.d ? ' on' : '') + '" data-act="stepToggle" data-id="' + l.id + '" data-i="' + i
+            + '" role="checkbox" aria-checked="' + !!st.d + '" aria-label="' + esc(st.t) + '">' + (st.d ? '✓' : '') + '</button>'
+            + '<span class="grow" dir="auto">' + esc(st.t) + '</span>'
+            + '<button class="pdel" data-act="stepRemove" data-id="' + l.id + '" data-i="' + i + '" aria-label="Remove step">×</button></div>';
+        }).join('') + '</div>';
+      } else {
+        h += '<p class="s">No preparation steps yet.' + (p.known ? '' : ' Analyze again from the ⋯ menu, or add your own.') + '</p>';
+      }
+      h += '<button class="link" style="text-align:start" data-act="stepAdd" data-id="' + l.id + '">+ Add step</button></div>';
+    }
+    return h + '</section>';
+  }
+
   function levelChip(l) {
     if (l.status === 'processing') return '<span class="chip proc">Processing</span>';
     if (l.status === 'queued') {
@@ -278,6 +466,7 @@
       case 'c': html = viewCollection(arg); tab = 'collections'; break;
       case 'link': html = viewLink(Number(arg)); break;
       case 'search': html = viewSearch(); tab = 'search'; break;
+      case 'planner': html = viewPlanner(); tab = 'planner'; break;
       case 'settings': html = viewSettings(); break;
       default: html = viewHome(); tab = 'home';
     }
@@ -302,7 +491,7 @@
     }
     tabs.innerHTML = t('home', 'Home', I.home, '#/home') + t('inbox', 'Inbox', I.inbox, '#/inbox')
       + '<button class="fab" aria-label="Add link" data-act="add">' + I.plus + '</button>'
-      + t('collections', 'Collections', I.folder, '#/collections') + t('search', 'Search', I.search, '#/search');
+      + t('collections', 'Collections', I.folder, '#/collections') + t('planner', 'Planner', I.planner, '#/planner');
   }
 
   // ------------------------------------------------------------------- Home
@@ -312,15 +501,17 @@
     var pending = inboxItems().length;
     var h = '<div class="body">';
     h += '<div class="row between"><h1 class="h1" dir="auto">Hi, ' + esc(name) + '</h1>'
-      + '<button class="avatar" data-act="settings" aria-label="Settings">' + esc(initials(name).charAt(0)) + '</button></div>';
+      + '<div class="row"><button class="avatar" style="background:var(--soft);color:var(--ink)" data-act="search" aria-label="Search">' + I.searchSm + '</button>'
+      + '<button class="avatar" data-act="settings" aria-label="Settings">' + esc(initials(name).charAt(0)) + '</button></div></div>';
     if (!S.settings.hasKey) h += keyNotice();
     h += '<button class="hero" data-tab="#/inbox"><div><p class="k">Smart Inbox</p><p class="v">'
       + (pending ? pending + ' to review' : 'All caught up') + '</p></div><span class="btn">Review</span></button>';
 
     var deadlines = upcomingDeadlines();
-    if (deadlines.length) {
-      h += '<div class="row between"><h3 class="h2">Upcoming deadlines</h3><button class="link" data-act="allDeadlines">See all</button></div>';
-      h += '<div class="dlist">' + deadlines.slice(0, 3).map(deadlineRow).join('') + '</div>';
+    var upNext = plannerOrder();
+    if (upNext.length) {
+      h += '<div class="row between"><h3 class="h2">Up next</h3><button class="link" data-tab="#/planner">Open Planner</button></div>';
+      h += '<div class="dlist">' + upNext.slice(0, 3).map(upNextRow).join('') + '</div>';
     }
 
     // Empty collections stay in the Collections tab but are hidden here.
@@ -522,6 +713,7 @@
       + (l.archived ? '<span class="chip">Archived</span>' : '') + '</div>';
 
     h += deadlineBlock(l);
+    h += planSection(l);
 
     if (l.status === 'queued' || l.status === 'processing') {
       h += '<div class="card"><span class="lbl">Brief by Claude</span>';
@@ -1069,6 +1261,39 @@
         break;
       case 'collectionMenu': collectionMenu(id); break;
       case 'deadline': closeSheet(); deadlineSheet(id); break;
+      case 'search': go('#/search'); break;
+      case 'toggleMissed': showMissed = !showMissed; render(false); break;
+      case 'planToggle': planOpen[id] = !planOpen[id]; render(false); break;
+      case 'planReanalyze':
+        confirmSheet('Analyze these opportunities?', 'Claude reads each one again to estimate the work and list the preparation steps. Each costs one analysis. Deadlines and steps you set yourself are kept.', 'Analyze', function () {
+          var n = SM.reanalyzeMissingPlans();
+          toast(n ? 'Analyzing ' + n + ' opportunit' + (n === 1 ? 'y' : 'ies') : 'Nothing to analyze');
+        });
+        break;
+      case 'editEffort':
+        promptSheet({ title: 'Work needed', hint: 'How many working days do you need to prepare this application?', value: l && l.effort_days ? String(l.effort_days) : '', placeholder: 'Days, e.g. 3', ok: 'Save' }, function (v) {
+          var n = parseInt(v, 10);
+          if (n >= 1 && n <= 60) SM.setEffort(id, n); else toast('Enter a number of days from 1 to 60');
+        });
+        break;
+      case 'stepToggle': case 'stepRemove': {
+        if (!l) break;
+        var i = Number(el.getAttribute('data-i'));
+        var steps = stepsOf(l).map(function (x) { return { t: x.t, d: x.d ? 1 : 0 }; });
+        if (act === 'stepToggle') steps[i].d = steps[i].d ? 0 : 1; else steps.splice(i, 1);
+        l.steps = steps;
+        SM.setSteps(id, JSON.stringify(steps));
+        render(false);
+        break;
+      }
+      case 'stepAdd':
+        promptSheet({ title: 'Add step', placeholder: 'e.g. Ask for a recommendation letter', ok: 'Add' }, function (v) {
+          if (!v.trim() || !l) return;
+          var steps = stepsOf(l).map(function (x) { return { t: x.t, d: x.d ? 1 : 0 }; });
+          steps.push({ t: v.trim(), d: 0 });
+          SM.setSteps(id, JSON.stringify(steps));
+        });
+        break;
       case 'allDeadlines': searchState = { q: '', filter: 'deadline' }; goTab('#/search'); break;
       case 'saveKey': {
         var key = document.getElementById('setKey').value.trim();
@@ -1169,6 +1394,7 @@
     if (route === '#/home') return 'home';
     if (route === '#/inbox') return 'inbox';
     if (route === '#/search') return 'search';
+    if (route === '#/planner') return 'planner';
     if (route === '#/collections' || route.indexOf('#/c/') === 0) return 'collections';
     return null;
   }
