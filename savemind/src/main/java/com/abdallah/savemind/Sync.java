@@ -327,7 +327,8 @@ final class Sync {
         c.setConnectTimeout(15_000);
         c.setReadTimeout(30_000);
         c.setRequestProperty("apikey", SyncConfig.ANON_KEY);
-        c.setRequestProperty("Authorization", "Bearer " + (bearer != null ? bearer : SyncConfig.ANON_KEY));
+        // The publishable key goes only in apikey; Authorization carries a signed-in user's token.
+        if (bearer != null) c.setRequestProperty("Authorization", "Bearer " + bearer);
         c.setRequestProperty("Accept", "application/json");
         if (body != null) {
             byte[] bytes = body.getBytes(StandardCharsets.UTF_8);

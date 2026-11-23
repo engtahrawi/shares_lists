@@ -12,7 +12,7 @@ const extractor = require('../backend/extractor');
 const urlutil = require('../backend/urlutil');
 const fake = require('./fake-supabase');
 
-const ANON = 'test-anon-key-0123456789012345678901234567890123456789';
+const ANON = 'sb_publishable_test_0123456789abcdef';
 const plain = { encrypt: (t) => Buffer.from(t).toString('base64'), decrypt: (e) => Buffer.from(e, 'base64').toString() };
 let failures = 0;
 async function test(name, fn) {

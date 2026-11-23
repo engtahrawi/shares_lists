@@ -21,7 +21,7 @@ class Sync {
     this.chain = null;
   }
 
-  available() { return !!(this.config.url && this.config.anonKey && this.config.anonKey.length > 40); }
+  available() { return !!(this.config.url && this.config.anonKey && this.config.anonKey.length > 30); }
 
   requestSoon() {
     if (!this.available() || !this.store.signedIn() || this.pending) return;
@@ -29,7 +29,9 @@ class Sync {
   }
 
   async call(method, path, body, bearer) {
-    const headers = { apikey: this.config.anonKey, Authorization: 'Bearer ' + (bearer || this.config.anonKey), Accept: 'application/json' };
+    // The publishable key goes only in apikey; Authorization carries a signed-in user's token.
+    const headers = { apikey: this.config.anonKey, Accept: 'application/json' };
+    if (bearer) headers.Authorization = 'Bearer ' + bearer;
     if (body != null) headers['Content-Type'] = 'application/json';
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 30000);
