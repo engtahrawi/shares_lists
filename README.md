@@ -20,6 +20,11 @@ Save links from any app, then let Claude brief, tag and file them.
   **Partial source** (metadata or shared text only) or **Unavailable** (no content claims are made).
 - **Smart Inbox**: review each brief, then **Accept** an existing collection, **Create & save** a suggested
   new collection (never created without approval), **Move**, **Edit** or **Keep in Inbox**.
+- **Deadlines**: Claude reads the closing date of an opportunity from the page or the shared text (never
+  guessing one). It shows as its own block on the link, color-coded by how close it is, and the nearest three
+  appear under **Upcoming deadlines** on Home. You can set, correct or remove a deadline (yours is never
+  overwritten) and get a reminder notification 3 days or 1 week before.
+- **Home** shows only collections that hold links; empty ones stay in the Collections tab.
 - **Collections**, **Favorites**, **Archive**, **Search** (title, brief, tags, URL, collection, notes;
   Arabic-aware) with source and status filters, **Retry** and **Add context** for failed analyses.
 - **Settings**: Claude API key (encrypted with the Android Keystore), model choice (Claude Opus 5.5 by

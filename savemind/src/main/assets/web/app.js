@@ -116,6 +116,82 @@
       .replace(/ة/g, 'ه').replace(/ى/g, 'ي');
   }
 
+  // -------------------------------------------------------------- deadlines
+
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  function hasDeadline(l) { return l.deadline_at !== null && l.deadline_at !== undefined; }
+  function startOfDay(ms) { var d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); }
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+  /** Countdown, tone and label for a link's deadline, or null when it has none. */
+  function deadlineInfo(l) {
+    if (!hasDeadline(l)) return null;
+    var passed = l.deadline_at < Date.now();
+    var days = Math.round((startOfDay(l.deadline_at) - startOfDay(Date.now())) / 86400000);
+    var tone = passed ? 'closed' : days <= 3 ? 'urgent' : days <= 14 ? 'soon' : 'later';
+    var label = passed ? 'Closed' : days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : days <= 3 ? days + ' days left' : days + ' days';
+    return { passed: passed, days: days, tone: tone, label: label };
+  }
+
+  function deadlineFull(l) {
+    var d = new Date(l.deadline_at);
+    var s = WEEKDAYS[d.getDay()] + ', ' + d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear();
+    if (l.deadline_has_time) s += ' · ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+    return s;
+  }
+
+  function dateTile(l, big) {
+    var d = new Date(l.deadline_at);
+    var info = deadlineInfo(l);
+    return '<div class="dtile ' + info.tone + (big ? ' big' : '') + '" aria-hidden="true"><span class="m">' + MONTHS[d.getMonth()].toUpperCase()
+      + '</span><span class="d">' + d.getDate() + '</span></div>';
+  }
+
+  function deadlineChip(l) {
+    var info = deadlineInfo(l);
+    return info ? '<span class="dchip ' + info.tone + '">' + esc(info.label) + '</span>' : '';
+  }
+
+  /** Upcoming deadlines first (soonest first), then passed ones (most recent first). */
+  function byDeadline(a, b) {
+    var now = Date.now(), pa = a.deadline_at < now, pb = b.deadline_at < now;
+    if (pa !== pb) return pa ? 1 : -1;
+    return pa ? b.deadline_at - a.deadline_at : a.deadline_at - b.deadline_at;
+  }
+
+  function upcomingDeadlines() {
+    var now = Date.now();
+    return S.links.filter(function (l) { return !l.archived && hasDeadline(l) && l.deadline_at >= now; })
+      .sort(function (a, b) { return a.deadline_at - b.deadline_at; });
+  }
+
+  function deadlineRow(l) {
+    var col = collectionById(l.collection_id);
+    return '<button class="drow" data-act="open" data-id="' + l.id + '">' + dateTile(l, false)
+      + '<div class="col grow"><p class="t clamp2" dir="auto">' + esc(titleOf(l)) + '</p>'
+      + '<span class="src" dir="auto">' + esc(col ? col.name : 'Inbox') + (l.action_label ? ' · ' + esc(l.action_label) : '') + '</span></div>'
+      + deadlineChip(l) + '</button>';
+  }
+
+  function deadlineBlock(l) {
+    var info = deadlineInfo(l);
+    if (!info) {
+      var expects = l.content_type === 'opportunity' || l.content_type === 'event' || l.content_type === 'course';
+      if (!expects) return '';
+      return '<section class="dblock none" aria-label="Deadline"><div class="col grow"><span class="dlabel">Deadline</span>'
+        + '<span class="s">' + (l.status === 'analyzed' || l.status === 'partial' ? 'No deadline found in this link.' : 'Not known yet.') + '</span></div>'
+        + '<button class="btn sec" style="min-height:38px" data-act="deadline" data-id="' + l.id + '">Add deadline</button></section>';
+    }
+    var src = l.deadline_source === 'user' ? 'Set by you' : 'Found by Claude';
+    if (l.remind_days && !info.passed) src += ' · Reminder ' + (l.remind_days === 7 ? '1 week' : l.remind_days + ' days') + ' before';
+    return '<section class="dblock ' + info.tone + '" aria-label="Deadline">' + dateTile(l, true)
+      + '<div class="col grow" style="gap:4px"><span class="dlabel">Deadline · ' + esc(info.label) + '</span>'
+      + '<span class="dfull">' + esc(deadlineFull(l)) + '</span><span class="src">' + esc(src) + '</span></div>'
+      + '<button class="btn sec" style="min-height:36px;padding:0 12px;align-self:flex-start" data-act="deadline" data-id="' + l.id + '" aria-label="Edit deadline">Edit</button></section>';
+  }
+
   function levelChip(l) {
     if (l.status === 'processing') return '<span class="chip proc">Processing</span>';
     if (l.status === 'queued') {
@@ -241,18 +317,25 @@
     h += '<button class="hero" data-tab="#/inbox"><div><p class="k">Smart Inbox</p><p class="v">'
       + (pending ? pending + ' to review' : 'All caught up') + '</p></div><span class="btn">Review</span></button>';
 
-    var cols = S.collections.slice().sort(function (a, b) { return countIn(b.id) - countIn(a.id); }).slice(0, 4);
-    h += '<div class="row between"><h3 class="h2">Collections</h3><button class="link" data-tab="#/collections">See all</button></div>';
+    var deadlines = upcomingDeadlines();
+    if (deadlines.length) {
+      h += '<div class="row between"><h3 class="h2">Upcoming deadlines</h3><button class="link" data-act="allDeadlines">See all</button></div>';
+      h += '<div class="dlist">' + deadlines.slice(0, 3).map(deadlineRow).join('') + '</div>';
+    }
+
+    // Empty collections stay in the Collections tab but are hidden here.
+    var cols = S.collections.filter(function (c) { return countIn(c.id) > 0; })
+      .sort(function (a, b) { return countIn(b.id) - countIn(a.id); }).slice(0, 4);
     if (cols.length) {
+      h += '<div class="row between"><h3 class="h2">Collections</h3><button class="link" data-tab="#/collections">See all</button></div>';
       h += '<div class="grid2">' + cols.map(function (c) {
         var col = colorOf(c);
+        var n = countIn(c.id);
+        var due = deadlines.filter(function (l) { return l.collection_id === c.id; }).length;
         return '<button class="card tap" data-go="#/c/' + c.id + '"><div class="tile" style="background:' + col[0] + ';color:' + col[1] + '">'
           + esc(initials(c.name)) + '</div><p class="t clamp2" dir="auto">' + esc(c.name) + '</p><span class="src">'
-          + countIn(c.id) + ' link' + (countIn(c.id) === 1 ? '' : 's') + '</span></button>';
+          + n + ' link' + (n === 1 ? '' : 's') + (due ? ' · ' + due + ' deadline' + (due === 1 ? '' : 's') : '') + '</span></button>';
       }).join('') + '</div>';
-    } else {
-      h += '<div class="card"><p class="s">Collections appear here when you approve one of Claude\'s suggestions or create your own.</p>'
-        + '<button class="btn sec" data-act="newCollection">+ New collection</button></div>';
     }
 
     var recent = S.links.filter(function (l) { return !l.archived; }).slice(0, 12);
@@ -438,6 +521,8 @@
       + '<button class="chip" data-act="move" data-id="' + l.id + '">' + esc(col ? col.name : 'Inbox') + ' ▾</button>'
       + (l.archived ? '<span class="chip">Archived</span>' : '') + '</div>';
 
+    h += deadlineBlock(l);
+
     if (l.status === 'queued' || l.status === 'processing') {
       h += '<div class="card"><span class="lbl">Brief by Claude</span>';
       if (l.error === 'needs_key') {
@@ -556,7 +641,7 @@
     var counts = {};
     S.links.forEach(function (l) { var s = siteOf(l); counts[s] = (counts[s] || 0) + 1; });
     var sources = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; }).slice(0, 4);
-    var f = [['all', 'All'], ['fav', 'Favorites']];
+    var f = [['all', 'All'], ['deadline', 'Deadlines'], ['fav', 'Favorites']];
     sources.forEach(function (s) { f.push(['src:' + s, s]); });
     f.push(['st:analyzed', 'Analyzed'], ['st:partial', 'Partial'], ['st:pending', 'Processing'], ['st:failed', 'Failed'], ['archived', 'Archived']);
     return f;
@@ -579,6 +664,7 @@
     var f = searchState.filter;
     var list = S.links.filter(function (l) {
       if (f === 'fav' && !l.favorite) return false;
+      if (f === 'deadline' && !hasDeadline(l)) return false;
       if (f === 'archived' && !l.archived) return false;
       if (f.indexOf('src:') === 0 && siteOf(l) !== f.slice(4)) return false;
       if (f === 'st:analyzed' && l.status !== 'analyzed') return false;
@@ -591,12 +677,17 @@
         l.notes, l.topic, siteOf(l), l.shared_text, l.action_label].join(' '));
       return terms.every(function (t) { return hay.indexOf(t.replace(/^#/, '')) >= 0; });
     });
+    if (f === 'deadline') list.sort(byDeadline);
     var h = '<span class="src">' + list.length + ' result' + (list.length === 1 ? '' : 's') + '</span>';
     h += list.slice(0, 200).map(function (l) {
       var c = '<div class="card" style="gap:8px"><button style="all:unset;display:flex;flex-direction:column;gap:6px;cursor:pointer" data-act="open" data-id="' + l.id + '">'
         + '<div class="row between" style="width:100%"><span class="src">' + esc(domainOf(l.url)) + '</span>' + levelChip(l) + '</div>'
         + '<p class="t" dir="auto">' + esc(titleOf(l)) + '</p>';
       if (l.summary && l.status !== 'failed') c += '<p class="s clamp2" dir="auto">' + esc(l.summary) + '</p>';
+      if (hasDeadline(l)) {
+        var dd = new Date(l.deadline_at);
+        c += '<div class="row" style="gap:6px"><span class="src">Deadline ' + dd.getDate() + ' ' + MONTHS[dd.getMonth()] + ' ' + dd.getFullYear() + '</span>' + deadlineChip(l) + '</div>';
+      }
       c += '</button>';
       if (l.status === 'failed') {
         c += '<p class="s">' + esc(l.error || 'Analysis failed.') + '</p><div class="row"><button class="btn sec flex1" data-act="context" data-id="' + l.id + '">Add context</button>'
@@ -805,12 +896,54 @@
     });
   }
 
+  function deadlineSheet(id) {
+    var l = linkById(id);
+    if (!l) return;
+    var has = hasDeadline(l);
+    var d = has ? new Date(l.deadline_at) : null;
+    var dateVal = d ? d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) : '';
+    var timeVal = d && l.deadline_has_time ? pad2(d.getHours()) + ':' + pad2(d.getMinutes()) : '';
+    var remind = l.deadline_source === 'user' ? (l.remind_days || 0) : 3;
+    var hint = !has ? 'Add the closing date so SaveMind shows it on Home and can remind you.'
+      : l.deadline_source === 'user' ? 'You set this deadline. Claude will not change it.'
+      : 'Claude found ' + d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear() + ' in the saved link. Correct it if the official page says otherwise.';
+    var opts = [[0, 'Off'], [3, '3 days before'], [7, '1 week before']];
+    var html = '<p class="h2">Deadline</p><p class="s">' + esc(hint) + '</p>'
+      + '<label class="lbl" for="dDate">Date</label><input id="dDate" class="inp" type="date" value="' + esc(dateVal) + '">'
+      + '<label class="lbl" for="dTime">Time (optional)</label><input id="dTime" class="inp" type="time" value="' + esc(timeVal) + '">'
+      + '<span class="lbl">Remind me</span><div class="row wrap" role="group" aria-label="Remind me" style="gap:6px">'
+      + opts.map(function (o) {
+        return '<button type="button" class="chip' + (o[0] === remind ? ' ink' : '') + '" data-remind="' + o[0] + '">' + o[1] + '</button>';
+      }).join('') + '</div>'
+      + '<div class="row" style="margin-top:4px">' + (has ? '<button class="btn danger flex1" id="dRemove">Remove</button>' : '<button class="btn sec flex1" data-act="sheetCancel">Cancel</button>')
+      + '<button class="btn pri flex14" id="dSave">Save deadline</button></div>';
+    openSheet(html, function (sheet) {
+      sheet.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-remind]');
+        if (!b) return;
+        remind = Number(b.getAttribute('data-remind'));
+        sheet.querySelectorAll('[data-remind]').forEach(function (x) { x.classList.toggle('ink', x === b); });
+      });
+      sheet.querySelector('#dSave').addEventListener('click', function () {
+        var date = sheet.querySelector('#dDate').value;
+        if (!date) { toast('Choose a date'); return; }
+        if (SM.setDeadline(id, date, sheet.querySelector('#dTime').value || '', remind)) {
+          closeSheet();
+          toast('Deadline saved');
+        } else toast('That date is not valid');
+      });
+      var rm = sheet.querySelector('#dRemove');
+      if (rm) rm.addEventListener('click', function () { SM.clearDeadline(id); closeSheet(); toast('Deadline removed'); });
+    });
+  }
+
   function moreSheet(id) {
     var l = linkById(id);
     if (!l) return;
     openSheet('<div class="col" style="gap:0">'
       + '<button class="opt" data-act="edit" data-id="' + id + '">Edit details</button>'
       + '<button class="opt" data-act="move" data-id="' + id + '">Move to collection</button>'
+      + '<button class="opt" data-act="deadline" data-id="' + id + '">' + (hasDeadline(l) ? 'Edit deadline' : 'Set deadline') + '</button>'
       + '<button class="opt" data-act="share" data-id="' + id + '">Share link</button>'
       + '<button class="opt" data-act="copy" data-id="' + id + '">Copy link</button>'
       + '<button class="opt" data-act="retry" data-id="' + id + '">Analyze again</button>'
@@ -935,6 +1068,8 @@
         });
         break;
       case 'collectionMenu': collectionMenu(id); break;
+      case 'deadline': closeSheet(); deadlineSheet(id); break;
+      case 'allDeadlines': searchState = { q: '', filter: 'deadline' }; goTab('#/search'); break;
       case 'saveKey': {
         var key = document.getElementById('setKey').value.trim();
         if (!key) { toast('Paste your API key first'); break; }

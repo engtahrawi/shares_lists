@@ -32,7 +32,8 @@ final class Db extends SQLiteOpenHelper {
             "action_label", "collection_id", "suggested_collection_id", "suggested_new_name",
             "confidence", "reviewed", "favorite", "archived", "notes", "error", "attempts",
             "next_attempt_at", "site_name", "image_url", "analyzed_at", "title_locked",
-            "tags_locked", "action_locked", "page_title"
+            "tags_locked", "action_locked", "page_title", "deadline_at", "deadline_has_time",
+            "deadline_source", "deadline_locked", "remind_days", "reminded"
     };
 
     private static Db instance;
@@ -43,7 +44,7 @@ final class Db extends SQLiteOpenHelper {
     }
 
     private Db(Context context) {
-        super(context, "savemind.db", null, 1);
+        super(context, "savemind.db", null, 2);
     }
 
     @Override
@@ -88,6 +89,7 @@ final class Db extends SQLiteOpenHelper {
                 + "title_locked INTEGER NOT NULL DEFAULT 0,"
                 + "tags_locked INTEGER NOT NULL DEFAULT 0,"
                 + "action_locked INTEGER NOT NULL DEFAULT 0)");
+        addDeadlineColumns(db);
         db.execSQL("CREATE INDEX idx_links_norm ON links(normalized_url)");
         db.execSQL("CREATE INDEX idx_links_status ON links(status)");
         db.execSQL("CREATE TABLE analysis_runs ("
@@ -106,7 +108,17 @@ final class Db extends SQLiteOpenHelper {
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        // Version 1 is the first schema.
+        if (oldVersion < 2) addDeadlineColumns(db);
+    }
+
+    /** Version 2: deadlines. deadline_at is epoch ms; a date without a time is stored as 23:59 local. */
+    private static void addDeadlineColumns(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE links ADD COLUMN deadline_at INTEGER");
+        db.execSQL("ALTER TABLE links ADD COLUMN deadline_has_time INTEGER NOT NULL DEFAULT 0");
+        db.execSQL("ALTER TABLE links ADD COLUMN deadline_source TEXT");
+        db.execSQL("ALTER TABLE links ADD COLUMN deadline_locked INTEGER NOT NULL DEFAULT 0");
+        db.execSQL("ALTER TABLE links ADD COLUMN remind_days INTEGER NOT NULL DEFAULT 0");
+        db.execSQL("ALTER TABLE links ADD COLUMN reminded INTEGER NOT NULL DEFAULT 0");
     }
 
     // ---------------------------------------------------------------- links
@@ -291,6 +303,20 @@ final class Db extends SQLiteOpenHelper {
         } finally {
             c.close();
         }
+    }
+
+    /** Links whose deadline reminder has not fired yet. */
+    JSONArray pendingReminders() {
+        JSONArray out = new JSONArray();
+        Cursor c = getReadableDatabase().query("links", LINK_COLUMNS,
+                "remind_days > 0 AND reminded = 0 AND deadline_at IS NOT NULL AND archived = 0",
+                null, null, null, null);
+        try {
+            while (c.moveToNext()) out.put(linkRow(c));
+        } finally {
+            c.close();
+        }
+        return out;
     }
 
     // ---------------------------------------------------------- collections

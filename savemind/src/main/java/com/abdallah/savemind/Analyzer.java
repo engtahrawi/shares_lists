@@ -133,6 +133,19 @@ final class Analyzer {
             v.put("error", (String) null);
             v.put("analyzed_at", System.currentTimeMillis());
             v.put("attempts", 0);
+            if (link.optLong("deadline_locked") == 0) {
+                Deadlines.Value d = Deadlines.parse(a.deadline);
+                if (d != null) {
+                    v.put("deadline_at", d.at);
+                    v.put("deadline_has_time", d.hasTime ? 1 : 0);
+                    v.put("deadline_source", "claude");
+                    if (link.isNull("deadline_at") || link.optLong("deadline_at") != d.at) v.put("reminded", 0);
+                } else {
+                    v.putNull("deadline_at");
+                    v.put("deadline_has_time", 0);
+                    v.putNull("deadline_source");
+                }
+            }
 
             boolean reviewed = link.optLong("reviewed") == 1;
             if (a.suggestedCollectionId > 0) {
@@ -147,6 +160,7 @@ final class Analyzer {
                 v.put("suggested_new_name", a.suggestedNewName);
             }
             db.updateLink(id, v);
+            Reminders.schedule(app, db.getLink(id));
             db.logRun(id, model, ClaudeClient.PROMPT_VERSION, level, "ok", null,
                     a.inputTokens, a.outputTokens, System.currentTimeMillis() - started);
         } catch (ClaudeClient.ClaudeException e) {
@@ -177,6 +191,8 @@ final class Analyzer {
                                            String notes, JSONObject link, JSONArray collections) {
         StringBuilder sb = new StringBuilder();
         sb.append("Analyze this saved link.\n\n");
+        sb.append("<today>").append(new java.text.SimpleDateFormat("yyyy-MM-dd (EEEE)", java.util.Locale.ENGLISH)
+                .format(new java.util.Date())).append("</today>\n");
         sb.append("<link>").append(url).append("</link>\n");
         if (!page.finalUrl.equals(url)) sb.append("<final_url>").append(page.finalUrl).append("</final_url>\n");
         sb.append("<site>").append(UrlUtil.domain(url));

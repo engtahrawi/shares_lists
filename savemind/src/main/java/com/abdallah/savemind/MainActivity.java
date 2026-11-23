@@ -183,6 +183,20 @@ public class MainActivity extends Activity {
         });
     }
 
+    private void requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT < 33) return;
+        if (checkSelfPermission("android.permission.POST_NOTIFICATIONS")
+                == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 21);
+            }
+        });
+    }
+
     private void openExternal(String url) {
         String valid = UrlUtil.validate(url);
         if (valid == null) return;
@@ -243,6 +257,7 @@ public class MainActivity extends Activity {
                         }
                         JSONObject backup = new JSONObject(new String(buf.toByteArray(), StandardCharsets.UTF_8));
                         int added = Db.get(MainActivity.this).importAll(backup);
+                        Reminders.scheduleAll(MainActivity.this);
                         toast("Imported " + added + " link" + (added == 1 ? "" : "s"));
                         Analyzer.kick(MainActivity.this);
                     } catch (Exception e) {
@@ -398,6 +413,7 @@ public class MainActivity extends Activity {
             ContentValues v = new ContentValues();
             v.put(flag, on ? 1 : 0);
             db().updateLink(id, v);
+            if (flag.equals("archived")) Reminders.schedule(MainActivity.this, db().getLink(id));
         }
 
         /** Applies the AI suggestion; a new collection is only created here, on user approval. */
@@ -421,6 +437,42 @@ public class MainActivity extends Activity {
             v.put("reviewed", 1);
             db().updateLink(id, v);
             return name == null ? "" : name;
+        }
+
+        /**
+         * Sets a deadline by hand ("YYYY-MM-DD", optional "HH:MM") with a reminder 0, 3 or 7 days before.
+         * A deadline set here is never overwritten by a later analysis.
+         */
+        @JavascriptInterface
+        public boolean setDeadline(long id, String date, String time, int remindDays) {
+            String text = date == null ? "" : date.trim();
+            if (time != null && !time.trim().isEmpty()) text += "T" + time.trim();
+            Deadlines.Value d = Deadlines.parse(text);
+            if (d == null) return false;
+            ContentValues v = new ContentValues();
+            v.put("deadline_at", d.at);
+            v.put("deadline_has_time", d.hasTime ? 1 : 0);
+            v.put("deadline_source", "user");
+            v.put("deadline_locked", 1);
+            v.put("remind_days", remindDays == 3 || remindDays == 7 ? remindDays : 0);
+            v.put("reminded", 0);
+            db().updateLink(id, v);
+            Reminders.schedule(MainActivity.this, db().getLink(id));
+            if (remindDays > 0) requestNotificationPermission();
+            return true;
+        }
+
+        /** Removes the deadline and keeps it removed on re-analysis. */
+        @JavascriptInterface
+        public void clearDeadline(long id) {
+            ContentValues v = new ContentValues();
+            v.putNull("deadline_at");
+            v.put("deadline_has_time", 0);
+            v.put("deadline_source", "user");
+            v.put("deadline_locked", 1);
+            v.put("remind_days", 0);
+            db().updateLink(id, v);
+            Reminders.schedule(MainActivity.this, db().getLink(id));
         }
 
         @JavascriptInterface

@@ -180,3 +180,30 @@ textarea.inp { height: auto; min-height: 96px; padding: 12px 14px; resize: none;
 .bad { color: var(--red); font-weight: 700; }
 
 .toast { position: fixed; left: 50%; bottom: 92px; transform: translateX(-50%); background: var(--ink); color: #fff; font-size: 14px; font-weight: 600; padding: 10px 16px; border-radius: 12px; z-index: 80; max-width: calc(100% - 40px); text-align: center; animation: fade .15s ease-out; }
+
+/* Deadlines */
+.dlist { background: #fff; border-radius: 18px; box-shadow: 0 1px 2px rgba(22,24,29,.06); display: flex; flex-direction: column; }
+.drow { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 0; background: none; text-align: start; width: 100%; border-bottom: 1px solid var(--line); }
+.drow:last-child { border-bottom: 0; }
+.dtile { width: 48px; height: 52px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; flex: none; background: var(--soft); color: #3A3F4B; }
+.dtile .m { font-size: 11px; font-weight: 700; letter-spacing: .06em; }
+.dtile .d { font-family: var(--display); font-size: 20px; font-weight: 800; line-height: 1; }
+.dtile.big { width: 64px; height: 72px; border-radius: 14px; }
+.dtile.big .m { font-size: 12px; letter-spacing: .08em; }
+.dtile.big .d { font-size: 30px; }
+.dtile.urgent { background: var(--red-soft); color: var(--red); }
+.dtile.big.urgent { background: var(--red); color: #fff; }
+.dtile.soon { background: var(--amber-soft); color: var(--amber); }
+.dtile.closed { background: var(--soft); color: var(--muted-2); }
+.dchip { font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 999px; white-space: nowrap; background: var(--soft); color: #3A3F4B; flex: none; }
+.dchip.urgent { background: var(--red); color: #fff; }
+.dchip.soon { background: var(--amber-soft); color: var(--amber); }
+.dchip.closed { background: var(--soft); color: var(--muted-2); }
+.dblock { background: #fff; border-radius: 18px; padding: 14px; display: flex; align-items: center; gap: 14px; border: 2px solid var(--line); }
+.dblock.urgent { border-color: var(--red); }
+.dblock.soon { border-color: #E2B56A; }
+.dblock.none { border-style: dashed; border-color: var(--line-2); }
+.dblock .dlabel { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted-2); }
+.dblock.urgent .dlabel { color: var(--red); }
+.dblock.soon .dlabel { color: var(--amber); }
+.dblock .dfull { font-family: var(--display); font-size: 19px; font-weight: 700; }

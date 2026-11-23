@@ -18,7 +18,7 @@ import java.nio.charset.StandardCharsets;
  */
 final class ClaudeClient {
 
-    static final String PROMPT_VERSION = "savemind-analysis-v1";
+    static final String PROMPT_VERSION = "savemind-analysis-v2";
 
     private static final String API = "https://api.anthropic.com/v1/messages";
     private static final String MODELS_API = "https://api.anthropic.com/v1/models/";
@@ -71,7 +71,12 @@ final class ClaudeClient {
                     + "propose a name that duplicates or nearly duplicates an existing collection. Use an "
                     + "empty string otherwise.\n"
                     + "- recommended_action: the single most useful next step for this link.\n"
-                    + "- confidence: 0 to 1, how confident you are in the collection suggestion.";
+                    + "- confidence: 0 to 1, how confident you are in the collection suggestion.\n"
+                    + "- deadline: the closing date for applying, registering or submitting, only when the "
+                    + "material states one explicitly. Format YYYY-MM-DD, or YYYY-MM-DDTHH:MM when a time is "
+                    + "given (local time as stated). Resolve relative dates such as \"this Friday\" against "
+                    + "<today>. An event's start date is not a deadline unless registration closes then. Use "
+                    + "an empty string when no deadline is stated; never guess one.";
 
     /** Validated analysis output. */
     static final class Analysis {
@@ -88,6 +93,8 @@ final class ClaudeClient {
         long inputTokens;
         long outputTokens;
         String servedModel;
+        /** "YYYY-MM-DD", "YYYY-MM-DDTHH:MM" or null. */
+        String deadline;
     }
 
     static final class ClaudeException extends Exception {
@@ -162,6 +169,7 @@ final class ClaudeClient {
         props.put("recommended_action", new JSONObject().put("type", "string").put("enum", new JSONArray(ACTIONS)));
         props.put("confidence", new JSONObject().put("type", "number"));
         props.put("content_sufficient", new JSONObject().put("type", "boolean"));
+        props.put("deadline", new JSONObject().put("type", "string"));
         schema.put("properties", props);
         JSONArray required = new JSONArray();
         java.util.Iterator<String> keys = props.keys();
@@ -297,6 +305,8 @@ final class ClaudeClient {
             double conf = o.optDouble("confidence", 0.5);
             a.confidence = Double.isNaN(conf) ? 0.5 : Math.max(0, Math.min(1, conf));
             a.contentSufficient = o.optBoolean("content_sufficient", true);
+            String deadline = o.optString("deadline", "").trim();
+            a.deadline = Deadlines.parse(deadline) != null ? deadline : null;
 
             JSONObject usage = resp.optJSONObject("usage");
             if (usage != null) {
