@@ -4,7 +4,7 @@
 
 const SYSTEM = require('./prompt');
 
-const PROMPT_VERSION = 'savemind-analysis-v3';
+const PROMPT_VERSION = 'savemind-analysis-v4';
 const API = 'https://api.anthropic.com/v1/messages';
 const MODELS_API = 'https://api.anthropic.com/v1/models/';
 const VERSION = '2023-06-01';
@@ -40,6 +40,7 @@ function schema() {
     content_sufficient: { type: 'boolean' },
     deadline: { type: 'string' },
     effort_days: { type: 'integer' },
+    countries: { type: 'array', items: { type: 'string' } },
     prep_steps: { type: 'array', items: { type: 'string' } }
   };
   return { type: 'object', properties: props, required: Object.keys(props), additionalProperties: false };
@@ -108,6 +109,27 @@ function oneOf(value, allowed, fallback) {
   return allowed.find((a) => a.toLowerCase() === v) || fallback;
 }
 
+let REGIONS = null;
+function isRegion(code) {
+  try {
+    if (!REGIONS) REGIONS = new Intl.DisplayNames(['en'], { type: 'region', fallback: 'none' });
+    return !!REGIONS.of(code);
+  } catch (e) {
+    return /^[A-Z]{2}$/.test(code);
+  }
+}
+
+/** Upper-case ISO 3166 codes or ONLINE, without duplicates, at most 8. */
+function validCountries(list) {
+  const out = [];
+  for (const c of Array.isArray(list) ? list : []) {
+    if (out.length >= 8) break;
+    const code = String(c || '').trim().toUpperCase();
+    if ((code === 'ONLINE' || (/^[A-Z]{2}$/.test(code) && isRegion(code))) && !out.includes(code)) out.push(code);
+  }
+  return out;
+}
+
 function parse(raw, collections, parseDeadline) {
   let resp;
   try { resp = JSON.parse(raw); } catch (e) { throw new ClaudeError('schema', "Claude's answer could not be read. Retry to try again.", true); }
@@ -151,6 +173,7 @@ function parse(raw, collections, parseDeadline) {
       if (t) a.steps.push(t);
     }
   }
+  a.countries = validCountries(o.countries);
   const u = resp.usage || {};
   a.inputTokens = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
   a.outputTokens = u.output_tokens || 0;
@@ -183,4 +206,4 @@ async function testKey(apiKey, model) {
   }
 }
 
-module.exports = { analyze, testKey, ClaudeError, PROMPT_VERSION, CONTENT_TYPES, ACTIONS, parse, request };
+module.exports = { analyze, testKey, ClaudeError, PROMPT_VERSION, CONTENT_TYPES, ACTIONS, parse, request, validCountries };

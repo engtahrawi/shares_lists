@@ -57,8 +57,9 @@ class Analyzer {
     const model = s.model();
     const started = Date.now();
     const page = await extractor.extract(url, sharedText + ' ' + notes);
+    const refs = await readRefs(link.ref_links);
     const collections = s.collectionsForPrompt(id);
-    const content = buildUserContent(url, page, sharedText, notes, link, collections);
+    const content = buildUserContent(url, page, sharedText, notes, link, collections) + refContent(refs);
     const v = {};
     if (page.siteName) v.site_name = page.siteName;
     if (page.image) v.image_url = page.image;
@@ -67,6 +68,10 @@ class Analyzer {
       const a = await claude.analyze(key, model, content, languageRule(s.briefLanguage()), collections, parseDeadline);
       let level = page.level;
       if (!a.contentSufficient && level === 'FULL') level = 'PARTIAL';
+      for (const r of refs) {
+        if (r.level === 'FULL') level = 'FULL';
+        else if (r.level === 'PARTIAL' && level === 'UNAVAILABLE') level = 'PARTIAL';
+      }
       if (!link.title_locked) v.title = a.title || page.title || urlutil.domain(url);
       v.summary = level === 'UNAVAILABLE'
         ? 'The content of this link could not be retrieved, so no summary was generated. Add context and retry to improve the analysis.'
@@ -102,6 +107,8 @@ class Analyzer {
           return { t, d: prev ? prev.d : 0 };
         });
       }
+      if (!link.countries_locked) v.countries = a.countries;
+      if (refs.length) v.ref_links = mergeRefStatus(s.getLink(id), refs);
       if (a.suggestedCollectionId > 0) {
         v.suggested_collection_id = a.suggestedCollectionId;
         v.suggested_new_name = null;
@@ -133,6 +140,43 @@ class Analyzer {
       s.logRun(id, model, claude.PROMPT_VERSION, page.level, 'error', e.code || 'error', 0, 0, Date.now() - started);
     }
   }
+}
+
+async function readRefs(list) {
+  const out = [];
+  for (const o of Array.isArray(list) ? list : []) {
+    if (out.length >= 5 || !o || !o.url) continue;
+    const res = await extractor.extract(o.url, '');
+    const body = res.text || res.description || '';
+    const status = res.level !== 'UNAVAILABLE' ? 'read' : /40[13]/.test(res.note) ? 'login' : 'failed';
+    out.push({ url: o.url, title: res.title, level: res.level, text: body.slice(0, 8000), status });
+  }
+  return out;
+}
+
+function refContent(refs) {
+  let s = '';
+  let n = 0;
+  for (const r of refs) {
+    if (r.status !== 'read') continue;
+    n++;
+    s += '<reference_material n="' + n + '" url="' + r.url.replace(/"/g, '%22') + '">\n';
+    if (r.title) s += 'title: ' + r.title + '\n';
+    s += r.text + '\n</reference_material>\n';
+  }
+  return s;
+}
+
+/** The current reference links with each one's read status and page title, keeping user changes. */
+function mergeRefStatus(current, refs) {
+  const cur = current && Array.isArray(current.ref_links) ? current.ref_links : [];
+  return cur.map((o) => {
+    const r = refs.find((x) => x.url === o.url);
+    if (!r) return o;
+    const next = Object.assign({}, o, { status: r.status });
+    if (r.title) next.title = r.title.slice(0, 120);
+    return next;
+  });
 }
 
 function buildUserContent(url, page, sharedText, notes, link, collections) {

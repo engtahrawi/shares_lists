@@ -100,8 +100,9 @@ final class Analyzer {
         long started = System.currentTimeMillis();
 
         Extractor.Result page = Extractor.extract(url, sharedText + " " + notes);
+        java.util.List<Ref> refs = readRefs(link.optJSONArray("ref_links"));
         JSONArray collections = db.collectionsForPrompt(id);
-        String content = buildUserContent(url, page, sharedText, notes, link, collections);
+        String content = buildUserContent(url, page, sharedText, notes, link, collections) + refContent(refs);
 
         ContentValues v = new ContentValues();
         if (!page.siteName.isEmpty()) v.put("site_name", page.siteName);
@@ -113,6 +114,11 @@ final class Analyzer {
                     languageRule(prefs.briefLanguage()), collections);
             String level = page.level;
             if (!a.contentSufficient && Extractor.FULL.equals(level)) level = Extractor.PARTIAL;
+            for (Ref r : refs) {
+                if (r.level == null) continue;
+                if (Extractor.FULL.equals(r.level)) level = Extractor.FULL;
+                else if (Extractor.PARTIAL.equals(r.level) && Extractor.UNAVAILABLE.equals(level)) level = Extractor.PARTIAL;
+            }
 
             if (link.optLong("title_locked") == 0) {
                 String title = !a.title.isEmpty() ? a.title : !page.title.isEmpty() ? page.title : UrlUtil.domain(url);
@@ -149,6 +155,8 @@ final class Analyzer {
             }
 
             applyPlan(link, a, v);
+            if (link.optLong("countries_locked") == 0) v.put("countries", a.countries.toString());
+            if (!refs.isEmpty()) v.put("ref_links", mergeRefStatus(db.getLink(id), refs));
 
             boolean reviewed = link.optLong("reviewed") == 1;
             if (a.suggestedCollectionId > 0) {
@@ -216,6 +224,72 @@ final class Analyzer {
             }
             v.put("steps", next.toString());
         }
+    }
+
+    /** A reference link and what reading it produced. */
+    private static final class Ref {
+        String url;
+        String title = "";
+        String text = "";
+        String level;
+        String status;
+    }
+
+    private static java.util.List<Ref> readRefs(JSONArray list) {
+        java.util.List<Ref> out = new java.util.ArrayList<>();
+        if (list == null) return out;
+        for (int i = 0; i < list.length() && out.size() < 5; i++) {
+            JSONObject o = list.optJSONObject(i);
+            if (o == null || o.optString("url").isEmpty()) continue;
+            Ref r = new Ref();
+            r.url = o.optString("url");
+            Extractor.Result res = Extractor.extract(r.url, "");
+            r.title = res.title;
+            r.level = res.level;
+            String body = !res.text.isEmpty() ? res.text : res.description;
+            r.text = body.length() > 8000 ? body.substring(0, 8000) : body;
+            if (!Extractor.UNAVAILABLE.equals(res.level)) r.status = "read";
+            else if (res.note.contains("401") || res.note.contains("403")) r.status = "login";
+            else r.status = "failed";
+            out.add(r);
+        }
+        return out;
+    }
+
+    private static String refContent(java.util.List<Ref> refs) {
+        StringBuilder sb = new StringBuilder();
+        int n = 0;
+        for (Ref r : refs) {
+            if (!"read".equals(r.status)) continue;
+            n++;
+            sb.append("<reference_material n=\"").append(n).append("\" url=\"").append(r.url.replace("\"", "%22")).append("\">\n");
+            if (!r.title.isEmpty()) sb.append("title: ").append(r.title).append('\n');
+            sb.append(r.text).append("\n</reference_material>\n");
+        }
+        return sb.toString();
+    }
+
+    /** The current reference links with each one's read status and page title, keeping user changes. */
+    private static String mergeRefStatus(JSONObject current, java.util.List<Ref> refs) {
+        JSONArray cur = current == null ? null : current.optJSONArray("ref_links");
+        JSONArray out = new JSONArray();
+        if (cur == null) return "[]";
+        for (int i = 0; i < cur.length(); i++) {
+            JSONObject o = cur.optJSONObject(i);
+            if (o == null) continue;
+            for (Ref r : refs) {
+                if (r.url.equals(o.optString("url"))) {
+                    try {
+                        o.put("status", r.status);
+                        if (!r.title.isEmpty()) o.put("title", r.title.length() > 120 ? r.title.substring(0, 120) : r.title);
+                    } catch (org.json.JSONException ignored) {
+                        // not reachable
+                    }
+                }
+            }
+            out.put(o);
+        }
+        return out.toString();
     }
 
     private static String buildUserContent(String url, Extractor.Result page, String sharedText,

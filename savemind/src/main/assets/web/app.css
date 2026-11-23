@@ -263,3 +263,12 @@ body.desk .selected { box-shadow: inset 3px 0 0 var(--blue); background: var(--b
 .offer { position: fixed; right: 24px; bottom: 24px; z-index: 70; background: #fff; border-radius: 16px; box-shadow: 0 10px 30px rgba(22,24,29,.2); padding: 14px; display: flex; align-items: center; gap: 10px; width: 420px; max-width: calc(100% - 48px); }
 body.desk #side { padding-top: 44px; -webkit-app-region: drag; }
 body.desk #side button, body.desk #side input { -webkit-app-region: no-drag; }
+
+/* Countries */
+.ctile { width: 32px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex: none; font-family: var(--display); font-weight: 800; font-size: 12px; }
+.ctile.big { width: 52px; height: 52px; border-radius: 12px; font-size: 17px; }
+.ctile svg { width: 60%; height: 60%; }
+.cchip { background: var(--blue-soft); color: var(--blue); }
+.crow { display: flex; align-items: center; gap: 12px; min-height: 48px; border: 0; border-bottom: 1px solid var(--line); background: none; text-align: start; width: 100%; font-size: 15px; padding: 0; }
+.crow .ctile { width: 32px; height: 24px; border-radius: 6px; font-size: 11px; }
+#cList { max-height: 46vh; overflow-y: auto; }

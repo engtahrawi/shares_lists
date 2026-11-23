@@ -179,6 +179,28 @@ function device(url) {
     assert.ok(extractor.isPrivate('127.0.0.1') && extractor.isPrivate('192.168.1.5') && extractor.isPrivate('::1') && !extractor.isPrivate('8.8.8.8'));
   });
 
+  await test('countries are validated and sync with reference links', async () => {
+    assert.deepStrictEqual(claude.validCountries(['de', 'PS', 'online', 'XX', 'DE', 'Germany']), ['DE', 'PS', 'ONLINE']);
+    const id = A.store.insertLink('https://giz.de/call', '', 'SaveMind', null);
+    A.store.updateLink(id, { countries: ['DE', 'JO'], countries_locked: 1, content_type: 'opportunity',
+      ref_links: [{ url: 'https://giz.de/guide', title: 'Guide', status: 'read' }] });
+    await A.sync.syncNow();
+    await B.sync.syncNow();
+    const bl = B.store.allLinks().find((l) => l.url === 'https://giz.de/call');
+    assert.deepStrictEqual(bl.countries, ['DE', 'JO']);
+    assert.strictEqual(bl.countries_locked, 1);
+    assert.strictEqual(bl.ref_links[0].status, 'read');
+  });
+
+  await test('old opportunities without a country are re-queued on this device', () => {
+    const id = B.store.insertLink('https://example.org/old-opp', '', 'SaveMind', null);
+    B.store.updateLink(id, { content_type: 'opportunity', status: 'analyzed', origin: 'another-device' });
+    assert.strictEqual(B.store.requeueMissingCountries(), 1);
+    const l = B.store.getLink(id);
+    assert.strictEqual(l.status, 'queued');
+    assert.strictEqual(l.origin, B.store.deviceId());
+  });
+
   srv.server.close();
   console.log(failures ? '\n' + failures + ' FAILED' : '\nall passed');
   process.exit(failures ? 1 : 0);

@@ -131,6 +131,39 @@ function createBridge(ctx) {
       store.updateLink(id, { steps: clean, steps_locked: 1 });
     },
 
+    setCountries(id, json) {
+      let list;
+      try { list = JSON.parse(json); } catch (e) { return; }
+      store.updateLink(id, { countries: claude.validCountries(list), countries_locked: 1 });
+    },
+
+    addRefLink(id, input) {
+      const l = store.getLink(id);
+      const url = urlutil.validate(input);
+      if (!l || !url) return JSON.stringify({ ok: false, error: 'Enter a valid web link that starts with http:// or https://' });
+      const refs = Array.isArray(l.ref_links) ? l.ref_links : [];
+      const norm = urlutil.normalize(url);
+      if (refs.some((r) => urlutil.normalize(r.url) === norm)) return JSON.stringify({ ok: false, error: 'This reference link is already added.' });
+      if (norm === urlutil.normalize(l.url)) return JSON.stringify({ ok: false, error: 'That is the saved link itself. Add a different page.' });
+      if (refs.length >= 5) return JSON.stringify({ ok: false, error: 'You can add up to 5 reference links.' });
+      refs.push({ url, title: urlutil.domain(url), status: 'pending' });
+      store.updateLink(id, { ref_links: refs, status: 'queued', attempts: 0, next_attempt_at: 0, error: null, origin: store.deviceId() });
+      analyzer.kick();
+      return JSON.stringify({ ok: true });
+    },
+
+    removeRefLink(id, index) {
+      const l = store.getLink(id);
+      if (!l || !Array.isArray(l.ref_links) || index < 0 || index >= l.ref_links.length) return;
+      store.updateLink(id, { ref_links: l.ref_links.filter((_, i) => i !== index) });
+    },
+
+    reanalyzeMissingCountries() {
+      const n = store.requeueMissingCountries();
+      if (n > 0) analyzer.kick();
+      return n;
+    },
+
     reanalyzeMissingPlans() {
       const n = store.requeueMissingPlans();
       if (n > 0) analyzer.kick();

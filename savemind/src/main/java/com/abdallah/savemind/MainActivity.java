@@ -522,6 +522,84 @@ public class MainActivity extends Activity {
             }
         }
 
+        /** Sets the countries (ISO codes or ONLINE); never overwritten by a later analysis. */
+        @JavascriptInterface
+        public void setCountries(long id, String json) {
+            try {
+                ContentValues v = new ContentValues();
+                v.put("countries", ClaudeClient.validCountries(new JSONArray(json)).toString());
+                v.put("countries_locked", 1);
+                db().updateLink(id, v);
+            } catch (JSONException ignored) {
+                // malformed input from the page is ignored
+            }
+        }
+
+        /** Adds a reference link (up to 5) and analyzes the opportunity again with it. */
+        @JavascriptInterface
+        public String addRefLink(long id, String input) {
+            JSONObject r = new JSONObject();
+            try {
+                JSONObject l = db().getLink(id);
+                String url = UrlUtil.validate(input);
+                if (l == null || url == null) {
+                    r.put("ok", false).put("error", "Enter a valid web link that starts with http:// or https://");
+                    return r.toString();
+                }
+                JSONArray refs = l.optJSONArray("ref_links");
+                if (refs == null) refs = new JSONArray();
+                String norm = UrlUtil.normalize(url);
+                for (int i = 0; i < refs.length(); i++) {
+                    if (norm.equals(UrlUtil.normalize(refs.optJSONObject(i).optString("url")))) {
+                        r.put("ok", false).put("error", "This reference link is already added.");
+                        return r.toString();
+                    }
+                }
+                if (norm.equals(UrlUtil.normalize(l.optString("url")))) {
+                    r.put("ok", false).put("error", "That is the saved link itself. Add a different page.");
+                    return r.toString();
+                }
+                if (refs.length() >= 5) {
+                    r.put("ok", false).put("error", "You can add up to 5 reference links.");
+                    return r.toString();
+                }
+                refs.put(new JSONObject().put("url", url).put("title", UrlUtil.domain(url)).put("status", "pending"));
+                ContentValues v = new ContentValues();
+                v.put("ref_links", refs.toString());
+                v.put("status", Db.ST_QUEUED);
+                v.put("attempts", 0);
+                v.put("next_attempt_at", 0);
+                v.putNull("error");
+                v.put("origin", prefs().deviceId());
+                db().updateLink(id, v);
+                Analyzer.kick(MainActivity.this);
+                r.put("ok", true);
+            } catch (JSONException ignored) {
+                // not reachable
+            }
+            return r.toString();
+        }
+
+        @JavascriptInterface
+        public void removeRefLink(long id, int index) {
+            JSONObject l = db().getLink(id);
+            if (l == null) return;
+            JSONArray refs = l.optJSONArray("ref_links");
+            if (refs == null || index < 0 || index >= refs.length()) return;
+            JSONArray out = new JSONArray();
+            for (int i = 0; i < refs.length(); i++) if (i != index) out.put(refs.opt(i));
+            ContentValues v = new ContentValues();
+            v.put("ref_links", out.toString());
+            db().updateLink(id, v);
+        }
+
+        @JavascriptInterface
+        public int reanalyzeMissingCountries() {
+            int n = db().requeueMissingCountries();
+            if (n > 0) Analyzer.kick(MainActivity.this);
+            return n;
+        }
+
         /** Re-analyzes open opportunities that have a deadline but no work estimate yet. */
         @JavascriptInterface
         public int reanalyzeMissingPlans() {

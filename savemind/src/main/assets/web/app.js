@@ -29,6 +29,10 @@
     heart: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>',
     heartOn: '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>',
     check: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>',
+    globe: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>',
+    pin: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
+    doc: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg>',
+    lock: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
     bookmark: '<svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M7 3h10a2 2 0 0 1 2 2v16l-7-3.8L5 21V5a2 2 0 0 1 2-2z"/></svg>',
     plusSm: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
     planner: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4M8 14h3M8 17h6"/></svg>',
@@ -45,6 +49,9 @@
   var searchState = { q: '', filter: 'all' };
   var addState = { url: '', context: '', copy: false, dup: null, error: '' };
   var planOpen = {};
+  var refsOpen = {};
+  var collMode = 'collections';
+  var countryFilter = 'open';
   var desk = false;
   var paneId = null;
   var showMissed = false;
@@ -204,6 +211,188 @@
       + '<button class="btn sec" style="min-height:36px;padding:0 12px;align-self:flex-start" data-act="deadline" data-id="' + l.id + '" aria-label="Edit deadline">Edit</button></section>';
   }
 
+  // -------------------------------------------------------------- countries
+
+  var ISO_CODES = 'AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW'.split(' ');
+  var COUNTRY_TYPES = ['opportunity', 'event', 'course'];
+  var regionNames = null;
+  try { regionNames = new Intl.DisplayNames(['en'], { type: 'region' }); } catch (e) { regionNames = null; }
+
+  function countryName(code) {
+    if (code === 'ONLINE') return 'Online / anywhere';
+    if (code === 'NONE') return 'No country yet';
+    try { return (regionNames && regionNames.of(code)) || code; } catch (e) { return code; }
+  }
+  function countriesOf(l) { return Array.isArray(l.countries) ? l.countries : []; }
+  function needsCountry(l) { return COUNTRY_TYPES.indexOf(l.content_type) >= 0; }
+  function countryTile(code, big) {
+    var c = code === 'ONLINE' ? ['#E0F2F7', '#0B6E82'] : code === 'NONE' ? ['#EEF0F4', '#5B6070'] : hashColor(code);
+    var inner = code === 'ONLINE' ? I.globe : code === 'NONE' ? '?' : esc(code);
+    return '<span class="ctile' + (big ? ' big' : '') + '" style="background:' + c[0] + ';color:' + c[1] + '">' + inner + '</span>';
+  }
+  function countryLabel(l) {
+    var list = countriesOf(l);
+    if (!list.length) return '';
+    var names = list.slice(0, 2).map(countryName).join(', ');
+    return list.length > 2 ? names + ' +' + (list.length - 2) : names;
+  }
+  /** Links grouped by country: [{code, links}] sorted by size, Online last, then those with no country. */
+  function countryGroups() {
+    var map = {};
+    S.links.forEach(function (l) {
+      if (l.archived) return;
+      countriesOf(l).forEach(function (c) { (map[c] = map[c] || []).push(l); });
+    });
+    var groups = Object.keys(map).filter(function (c) { return c !== 'ONLINE'; })
+      .map(function (c) { return { code: c, links: map[c] }; })
+      .sort(function (a, b) { return b.links.length - a.links.length || countryName(a.code).localeCompare(countryName(b.code)); });
+    if (map.ONLINE) groups.push({ code: 'ONLINE', links: map.ONLINE });
+    var none = S.links.filter(function (l) { return !l.archived && needsCountry(l) && !countriesOf(l).length; });
+    if (none.length) groups.push({ code: 'NONE', links: none });
+    return groups;
+  }
+  function isOpen(l) { return !hasDeadline(l) || l.deadline_at >= Date.now(); }
+  function nextClose(links) {
+    var next = null;
+    links.forEach(function (l) { if (hasDeadline(l) && l.deadline_at >= Date.now() && (next === null || l.deadline_at < next.deadline_at)) next = l; });
+    return next;
+  }
+
+  function viewCountriesList() {
+    var groups = countryGroups();
+    if (!groups.length) {
+      return '<div class="empty"><div class="big">' + I.globe + '</div><p class="t">No countries yet</p>'
+        + '<p class="s">Claude labels opportunities, events and courses with the country where they take place. Save one to see it here.</p></div>';
+    }
+    return groups.map(function (g) {
+      var open = g.links.filter(isOpen).length;
+      var next = nextClose(g.links);
+      var sub = g.code === 'NONE' ? g.links.length + ' saved before countries were added'
+        : g.links.length + ' opportunit' + (g.links.length === 1 ? 'y' : 'ies') + ' · ' + (open ? open + ' open' : 'closed');
+      return '<button class="card rowcard tap" data-go="#/country/' + g.code + '">' + countryTile(g.code, true)
+        + '<div class="col grow"><p class="t">' + esc(countryName(g.code)) + '</p><span class="src">' + esc(sub) + '</span></div>'
+        + (next ? '<span class="dchip ' + deadlineInfo(next).tone + '">Next: ' + esc(shortDate(next.deadline_at)) + '</span>' : '') + '</button>';
+    }).join('');
+  }
+
+  function viewCountry(code) {
+    var g = countryGroups().filter(function (x) { return x.code === code; })[0];
+    var links = g ? g.links : [];
+    var open = links.filter(isOpen);
+    var shown = (countryFilter === 'open' && code !== 'NONE' ? open : links).slice().sort(function (a, b) {
+      var ah = hasDeadline(a), bh = hasDeadline(b);
+      if (ah !== bh) return ah ? -1 : 1;
+      return ah ? byDeadline(a, b) : b.saved_at - a.saved_at;
+    });
+    var h = '<div class="body"><div class="topbar"><button class="btn sec icon" data-act="back" aria-label="Back">' + I.back + '</button></div>'
+      + '<div class="row" style="gap:12px">' + countryTile(code, true) + '<div class="col"><h1 class="h1" style="font-size:28px">' + esc(countryName(code)) + '</h1>'
+      + '<span class="s">' + links.length + ' opportunit' + (links.length === 1 ? 'y' : 'ies') + (code === 'NONE' ? '' : ' · ' + open.length + ' open') + '</span></div></div>';
+    if (code === 'NONE') {
+      var mine = links.filter(function (l) { return ['analyzed', 'partial', 'failed'].indexOf(l.status) >= 0 && !l.countries_locked; }).length;
+      h += '<div class="card" style="gap:8px"><p class="s">These were saved before countries were added. Claude can read them again and add their countries; each costs one analysis. You can also set a country by hand on each one.</p>'
+        + (mine ? '<button class="btn sec" data-act="countryReanalyze">Analyze ' + (mine === 1 ? 'it' : 'all ' + mine) + '</button>' : '') + '</div>';
+    } else {
+      h += '<div class="row" style="gap:6px"><button class="chip' + (countryFilter === 'open' ? ' ink' : '') + '" data-act="countryFilter" data-v="open">Open (' + open.length + ')</button>'
+        + '<button class="chip' + (countryFilter === 'all' ? ' ink' : '') + '" data-act="countryFilter" data-v="all">All (' + links.length + ')</button></div>';
+    }
+    if (!shown.length) return h + '<div class="empty"><p class="s">' + (links.length ? 'All of them have closed. Switch to All to see them.' : 'Nothing here yet.') + '</p></div></div>';
+    h += '<div class="dlist">' + shown.map(function (l) {
+      var others = countriesOf(l).filter(function (c) { return c !== code; });
+      var col = collectionById(l.collection_id);
+      var sub = (col ? col.name : 'Inbox') + (others.length ? ' · also ' + others.map(countryName).join(', ') : '');
+      var p = planOf(l);
+      return '<button class="drow" data-act="open" data-id="' + l.id + '">' + (hasDeadline(l) ? dateTile(l, false) : thumb(l))
+        + '<div class="col grow"><p class="t clamp2" dir="auto">' + esc(titleOf(l)) + '</p><span class="src" dir="auto">' + esc(sub) + '</span></div>'
+        + (p ? startChip(p) : '') + '</button>';
+    }).join('') + '</div>';
+    return h + '</div>';
+  }
+
+  function countrySheet(id) {
+    var l = linkById(id);
+    if (!l) return;
+    var selected = countriesOf(l).slice();
+    var used = {};
+    S.links.forEach(function (x) { if (x.id !== id) countriesOf(x).forEach(function (c) { used[c] = true; }); });
+    var hint = !selected.length ? 'Choose every country where this opportunity takes place.'
+      : l.countries_locked ? 'You set these countries. Claude will not change them.'
+      : 'Claude found ' + selected.map(countryName).join(', ') + '. Choose every country where the opportunity takes place.';
+    var html = '<p class="h2">Countries</p><p class="s">' + esc(hint) + '</p>'
+      + '<label class="lbl" for="cSearch" style="position:absolute;left:-9999px">Search countries</label>'
+      + '<input id="cSearch" class="inp" placeholder="Search countries" autocomplete="off">'
+      + '<div id="cList" class="col" style="gap:0"></div>'
+      + '<div class="row"><button class="btn sec flex1" data-act="sheetCancel">Cancel</button><button class="btn pri flex14" id="cSave">Save countries</button></div>';
+    openSheet(html, function (sheet) {
+      var list = sheet.querySelector('#cList');
+      var search = sheet.querySelector('#cSearch');
+      function row(code) {
+        var on = selected.indexOf(code) >= 0;
+        var tag = on && !l.countries_locked && countriesOf(l).indexOf(code) >= 0 ? 'Found by Claude' : used[code] ? 'Used before' : '';
+        return '<button class="crow' + (on ? ' on' : '') + '" data-code="' + code + '" role="checkbox" aria-checked="' + on + '">'
+          + '<span class="pcheck' + (on ? ' on' : '') + '">' + (on ? '✓' : '') + '</span>' + countryTile(code, false)
+          + '<span class="grow">' + esc(countryName(code)) + '</span><span class="src">' + tag + '</span></button>';
+      }
+      function draw() {
+        var q = normalizeSearch(search.value.trim());
+        var codes;
+        if (q) {
+          codes = ['ONLINE'].concat(ISO_CODES).filter(function (c) {
+            return normalizeSearch(countryName(c)).indexOf(q) >= 0 || c.toLowerCase() === q;
+          }).slice(0, 40);
+        } else {
+          var first = selected.concat(Object.keys(used).filter(function (c) { return selected.indexOf(c) < 0; }));
+          if (first.indexOf('ONLINE') < 0) first.push('ONLINE');
+          codes = first.concat(ISO_CODES.filter(function (c) { return first.indexOf(c) < 0; })
+            .sort(function (a, b) { return countryName(a).localeCompare(countryName(b)); }));
+        }
+        list.innerHTML = codes.map(row).join('');
+      }
+      search.addEventListener('input', draw);
+      list.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-code]');
+        if (!b) return;
+        var code = b.getAttribute('data-code');
+        var i = selected.indexOf(code);
+        if (i >= 0) selected.splice(i, 1); else if (selected.length < 8) selected.push(code);
+        draw();
+      });
+      sheet.querySelector('#cSave').addEventListener('click', function () {
+        SM.setCountries(id, JSON.stringify(selected));
+        closeSheet();
+        toast(selected.length ? 'Countries saved' : 'Countries cleared');
+      });
+      draw();
+    });
+  }
+
+  function refSection(l) {
+    var refs = Array.isArray(l.ref_links) ? l.ref_links : [];
+    var open = !!refsOpen[l.id];
+    var read = refs.filter(function (r) { return r.status === 'read'; }).length;
+    var summary = !refs.length ? 'Add the official page, guidelines or an FAQ'
+      : refs.length + ' link' + (refs.length === 1 ? '' : 's') + (read ? ' · ' + read + ' read by Claude' : refs.some(function (r) { return r.status === 'pending'; }) ? ' · reading…' : '');
+    var h = '<section class="plan" aria-label="Reference links"><button class="phead" data-act="refsToggle" data-id="' + l.id + '" aria-expanded="' + open + '">'
+      + '<div class="col grow" style="gap:4px"><span class="t">Reference links</span><span class="s">' + esc(summary) + '</span></div>'
+      + '<span class="chev' + (open ? ' open' : '') + '">' + I.chevron + '</span></button>';
+    if (open) {
+      h += '<div class="pbody" style="gap:0">';
+      refs.forEach(function (r, i) {
+        var st = r.status === 'read' ? ['read', 'var(--green)', I.doc, ['var(--blue-soft)', 'var(--blue)']]
+          : r.status === 'login' ? ['Needs a login, could not be read', 'var(--amber)', I.lock, ['var(--amber-soft)', 'var(--amber)']]
+          : r.status === 'failed' ? ['Could not be read', 'var(--red)', I.doc, ['var(--red-soft)', 'var(--red)']]
+          : ['Claude is reading it…', 'var(--blue)', I.doc, ['var(--blue-soft)', 'var(--blue)']];
+        h += '<div class="pstep" style="min-height:54px"><span class="ctile" style="background:' + st[3][0] + ';color:' + st[3][1] + '">' + st[2] + '</span>'
+          + '<button class="col grow" style="all:unset;display:flex;flex-direction:column;gap:2px;cursor:pointer;flex:1;min-width:0" data-act="refOpen" data-id="' + l.id + '" data-i="' + i + '">'
+          + '<span class="t clamp2" style="font-size:14px;font-weight:600" dir="auto">' + esc(r.title || domainOf(r.url)) + '</span>'
+          + '<span class="src" style="color:' + st[1] + ';font-weight:600">' + esc(domainOf(r.url)) + ' · ' + esc(st[0]) + '</span></button>'
+          + '<button class="pdel" data-act="refRemove" data-id="' + l.id + '" data-i="' + i + '" aria-label="Remove reference link">×</button></div>';
+      });
+      if (refs.length < 5) h += '<button class="link" style="text-align:start;padding-top:10px" data-act="refAdd" data-id="' + l.id + '">+ Add reference link</button>';
+      h += '<p class="src" style="margin:8px 0 0">Claude reads these with the saved link and updates the brief, deadline, country and plan.</p></div>';
+    }
+    return h + '</section>';
+  }
+
   // ---------------------------------------------------------------- planner
 
   var DAY = 86400000;
@@ -283,6 +472,10 @@
     return '<button class="drow" data-act="open" data-id="' + l.id + '">' + dateTile(l, false)
       + '<div class="col grow"><p class="t clamp2" dir="auto">' + esc(titleOf(l)) + '</p><span class="src">' + esc(sub) + '</span></div>'
       + startChip(p) + '</button>';
+  }
+
+  function refsRead(l) {
+    return (Array.isArray(l.ref_links) ? l.ref_links : []).filter(function (r) { return r.status === 'read'; }).length;
   }
 
   function viewPlanner() {
@@ -483,8 +676,10 @@
     switch (name) {
       case 'inbox': html = viewInbox(); tab = 'inbox'; break;
       case 'add': html = viewAdd(); break;
-      case 'collections': html = viewCollections(); tab = 'collections'; break;
+      case 'collections': collMode = 'collections'; html = viewCollections(); tab = 'collections'; break;
       case 'c': html = viewCollection(arg); tab = 'collections'; break;
+      case 'countries': collMode = 'countries'; html = viewCollections(); tab = 'collections'; break;
+      case 'country': html = viewCountry(arg); tab = 'collections'; break;
       case 'link': html = viewLink(Number(arg)); break;
       case 'search': html = viewSearch(); tab = 'search'; break;
       case 'planner': html = viewPlanner(); tab = 'planner'; break;
@@ -520,6 +715,7 @@
       + item('#/home', 'Home', I.home)
       + item('#/inbox', 'Smart Inbox', I.inbox, pending ? '<span class="sbadge">' + pending + '</span>' : '')
       + item('#/planner', 'Planner', I.planner)
+      + item('#/countries', 'Countries', I.globe)
       + '<span class="slabel">Collections</span>';
     S.collections.slice().sort(function (a, b) { return countIn(b.id) - countIn(a.id); }).forEach(function (c) {
       var col = colorOf(c);
@@ -818,6 +1014,8 @@
     h += '<h2 class="h1" style="font-size:26px" dir="auto">' + esc(titleOf(l)) + '</h2>';
     h += '<div class="row wrap" style="gap:6px">' + levelChip(l)
       + '<button class="chip" data-act="move" data-id="' + l.id + '">' + esc(col ? col.name : 'Inbox') + ' ▾</button>'
+      + (countriesOf(l).length ? '<button class="chip cchip" data-act="countries" data-id="' + l.id + '">' + I.pin + esc(countryLabel(l)) + ' ▾</button>'
+        : needsCountry(l) ? '<button class="chip" data-act="countries" data-id="' + l.id + '">+ Country</button>' : '')
       + (l.archived ? '<span class="chip">Archived</span>' : '') + '</div>';
 
     h += deadlineBlock(l);
@@ -844,9 +1042,11 @@
       h += '<div class="card"><div class="row between"><span class="lbl">Brief by Claude</span>'
         + (l.topic ? '<span class="src" dir="auto">' + esc(l.topic) + '</span>' : '') + '</div>'
         + '<p class="s" style="font-size:14px;color:var(--ink-2)" dir="auto">' + esc(l.summary || 'No summary.') + '</p>'
-        + (l.source_level === 'PARTIAL' ? '<p class="src">Based on page metadata or shared text only. Open the original for full details.</p>' : '')
+        + (refsRead(l) ? '<p class="src">Based on the saved link and ' + refsRead(l) + ' reference link' + (refsRead(l) === 1 ? '' : 's') + '.</p>'
+          : l.source_level === 'PARTIAL' ? '<p class="src">Based on page metadata or shared text only. Open the original for full details.</p>' : '')
         + '</div>';
     }
+    h += refSection(l);
 
     h += tagsHtml(l, true);
 
@@ -886,7 +1086,11 @@
   // ------------------------------------------------------------ Collections
 
   function viewCollections() {
-    var h = '<div class="body"><div class="row between"><h1 class="h1">Collections</h1><button class="btn sec" style="min-height:40px" data-act="newCollection">+ New</button></div>';
+    var h = '<div class="body"><div class="row between"><h1 class="h1">Collections</h1>'
+      + (collMode === 'collections' ? '<button class="btn sec" style="min-height:40px" data-act="newCollection">+ New</button>' : '') + '</div>'
+      + '<div class="seg" role="tablist" aria-label="Browse by"><button role="tab" aria-selected="' + (collMode === 'collections') + '" class="' + (collMode === 'collections' ? 'on' : '') + '" data-act="collMode" data-v="collections">Collections</button>'
+      + '<button role="tab" aria-selected="' + (collMode === 'countries') + '" class="' + (collMode === 'countries' ? 'on' : '') + '" data-act="collMode" data-v="countries">Countries</button></div>';
+    if (collMode === 'countries') return h + viewCountriesList() + '</div>';
     var inboxCount = countIn(null);
     h += '<button class="card rowcard tap" data-go="#/c/inbox"><div class="thumb" style="font-size:15px">IN</div><div class="col grow"><p class="t">Inbox</p><span class="src">Uncategorized · ' + inboxCount + '</span></div></button>';
     S.collections.forEach(function (c) {
@@ -974,7 +1178,7 @@
       if (!terms.length) return true;
       var col = collectionById(l.collection_id);
       var hay = normalizeSearch([l.title, l.page_title, l.summary, (l.tags || []).join(' '), l.url, col ? col.name : 'inbox',
-        l.notes, l.topic, siteOf(l), l.shared_text, l.action_label].join(' '));
+        l.notes, l.topic, siteOf(l), l.shared_text, l.action_label, countriesOf(l).map(countryName).join(' ')].join(' '));
       return terms.every(function (t) { return hay.indexOf(t.replace(/^#/, '')) >= 0; });
     });
     if (f === 'deadline') list.sort(byDeadline);
@@ -1433,6 +1637,26 @@
         });
         break;
       case 'toggleMissed': showMissed = !showMissed; render(false); break;
+      case 'collMode': go(el.getAttribute('data-v') === 'countries' ? '#/countries' : '#/collections', true); break;
+      case 'countryFilter': countryFilter = el.getAttribute('data-v'); render(false); break;
+      case 'countries': closeSheet(); countrySheet(id); break;
+      case 'countryReanalyze':
+        confirmSheet('Find their countries?', 'Claude reads each one again to add its country. Each costs one analysis. Countries you set yourself are kept.', 'Analyze', function () {
+          var n = SM.reanalyzeMissingCountries();
+          toast(n ? 'Analyzing ' + n + ' opportunit' + (n === 1 ? 'y' : 'ies') : 'Nothing to analyze');
+        });
+        break;
+      case 'refsToggle': refsOpen[id] = !refsOpen[id]; render(false); break;
+      case 'refOpen': if (l && l.ref_links[Number(el.getAttribute('data-i'))]) SM.openUrl(l.ref_links[Number(el.getAttribute('data-i'))].url); break;
+      case 'refRemove': SM.removeRefLink(id, Number(el.getAttribute('data-i'))); break;
+      case 'refAdd':
+        promptSheet({ title: 'Add reference link', hint: 'The official call, guidelines or an FAQ that explains this opportunity. Claude reads it and updates the brief, deadline, country and plan.', placeholder: 'https://', ok: 'Add and analyze' }, function (v) {
+          if (!v.trim()) return;
+          var r = JSON.parse(SM.addRefLink(id, v.trim()));
+          if (r.ok) { refsOpen[id] = true; toast('Added. Claude is reading it.'); }
+          else toast(r.error || 'Could not add the link');
+        });
+        break;
       case 'planToggle': planOpen[id] = !planOpen[id]; render(false); break;
       case 'planReanalyze':
         confirmSheet('Analyze these opportunities?', 'Claude reads each one again to estimate the work and list the preparation steps. Each costs one analysis. Deadlines and steps you set yourself are kept.', 'Analyze', function () {
@@ -1570,7 +1794,7 @@
     if (route === '#/inbox') return 'inbox';
     if (route === '#/search') return 'search';
     if (route === '#/planner') return 'planner';
-    if (route === '#/collections' || route.indexOf('#/c/') === 0) return 'collections';
+    if (route === '#/collections' || route === '#/countries' || route.indexOf('#/c/') === 0 || route.indexOf('#/country/') === 0) return 'collections';
     return null;
   }
 

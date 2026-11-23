@@ -34,7 +34,8 @@ final class Db extends SQLiteOpenHelper {
             "next_attempt_at", "site_name", "image_url", "analyzed_at", "title_locked",
             "tags_locked", "action_locked", "page_title", "deadline_at", "deadline_has_time",
             "deadline_source", "deadline_locked", "remind_days", "reminded", "effort_days",
-            "effort_locked", "steps", "steps_locked", "uid", "origin", "dirty"
+            "effort_locked", "steps", "steps_locked", "uid", "origin", "dirty", "countries",
+            "countries_locked", "ref_links"
     };
 
     /** Link fields shared with other devices (plus "collection" and "suggested_collection" uids). */
@@ -44,7 +45,8 @@ final class Db extends SQLiteOpenHelper {
             "suggested_new_name", "confidence", "reviewed", "favorite", "archived", "notes", "error",
             "site_name", "image_url", "analyzed_at", "title_locked", "tags_locked", "action_locked",
             "deadline_at", "deadline_has_time", "deadline_source", "deadline_locked", "remind_days",
-            "effort_days", "effort_locked", "steps", "steps_locked", "origin"
+            "effort_days", "effort_locked", "steps", "steps_locked", "origin", "countries",
+            "countries_locked", "ref_links"
     };
 
     /** Columns that never come from a backup file or another device as-is. */
@@ -61,7 +63,7 @@ final class Db extends SQLiteOpenHelper {
     private final Context app;
 
     private Db(Context context) {
-        super(context, "savemind.db", null, 4);
+        super(context, "savemind.db", null, 5);
         app = context;
     }
 
@@ -120,6 +122,7 @@ final class Db extends SQLiteOpenHelper {
         addDeadlineColumns(db);
         addPlanColumns(db);
         addSyncColumns(db);
+        addCountryColumns(db);
         db.execSQL("CREATE INDEX idx_links_norm ON links(normalized_url)");
         db.execSQL("CREATE INDEX idx_links_status ON links(status)");
         db.execSQL("CREATE TABLE analysis_runs ("
@@ -141,6 +144,17 @@ final class Db extends SQLiteOpenHelper {
         if (oldVersion < 2) addDeadlineColumns(db);
         if (oldVersion < 3) addPlanColumns(db);
         if (oldVersion < 4) addSyncColumns(db);
+        if (oldVersion < 5) addCountryColumns(db);
+    }
+
+    /**
+     * Version 5: countries where the opportunity takes place (ISO 3166 codes or "ONLINE") and
+     * reference links ([{"url","title","status"}]) that Claude reads with the saved link.
+     */
+    private static void addCountryColumns(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE links ADD COLUMN countries TEXT NOT NULL DEFAULT '[]'");
+        db.execSQL("ALTER TABLE links ADD COLUMN countries_locked INTEGER NOT NULL DEFAULT 0");
+        db.execSQL("ALTER TABLE links ADD COLUMN ref_links TEXT NOT NULL DEFAULT '[]'");
     }
 
     /**
@@ -281,11 +295,12 @@ final class Db extends SQLiteOpenHelper {
                         o.put(name, c.getString(i));
                 }
             }
-            String steps = o.optString("steps", "[]");
-            try {
-                o.put("steps", new JSONArray(steps));
-            } catch (JSONException e) {
-                o.put("steps", new JSONArray());
+            for (String arr : new String[]{"steps", "countries", "ref_links"}) {
+                try {
+                    o.put(arr, new JSONArray(o.optString(arr, "[]")));
+                } catch (JSONException e) {
+                    o.put(arr, new JSONArray());
+                }
             }
             String tags = o.optString("tags", "[]");
             try {
@@ -432,6 +447,23 @@ final class Db extends SQLiteOpenHelper {
                 "deadline_at IS NOT NULL AND deadline_at > ? AND effort_days IS NULL AND archived = 0 "
                         + "AND status IN ('analyzed', 'partial', 'failed')",
                 new String[]{String.valueOf(System.currentTimeMillis())});
+        if (n > 0) localChange();
+        return n;
+    }
+
+    /** Opportunities, events and courses with no country yet, re-queued on this device. */
+    int requeueMissingCountries() {
+        ContentValues v = new ContentValues();
+        v.put("origin", new Prefs(app).deviceId());
+        v.put("dirty", 1);
+        v.put("updated_at", System.currentTimeMillis());
+        v.put("status", ST_QUEUED);
+        v.put("attempts", 0);
+        v.put("next_attempt_at", 0);
+        v.putNull("error");
+        int n = getWritableDatabase().update("links", v,
+                "content_type IN ('opportunity', 'event', 'course') AND countries = '[]' AND countries_locked = 0 "
+                        + "AND archived = 0 AND status IN ('analyzed', 'partial', 'failed')", null);
         if (n > 0) localChange();
         return n;
     }
@@ -934,7 +966,7 @@ final class Db extends SQLiteOpenHelper {
 
         for (String f : SYNC_LINK_FIELDS) {
             if (!data.has(f) || data.isNull(f)) {
-                if (f.equals("tags") || f.equals("steps")) v.put(f, "[]");
+                if (f.equals("tags") || f.equals("steps") || f.equals("countries") || f.equals("ref_links")) v.put(f, "[]");
                 else if (isNotNullInt(f)) v.put(f, 0);
                 else v.putNull(f);
                 continue;
@@ -966,7 +998,7 @@ final class Db extends SQLiteOpenHelper {
         switch (f) {
             case "reviewed": case "favorite": case "archived": case "title_locked": case "tags_locked":
             case "action_locked": case "deadline_has_time": case "deadline_locked": case "remind_days":
-            case "effort_locked": case "steps_locked":
+            case "effort_locked": case "steps_locked": case "countries_locked":
                 return true;
             default:
                 return false;

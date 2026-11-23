@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 const METHODS = ['getState', 'getStats', 'appVersion', 'validateUrl', 'checkDuplicate', 'addLink', 'updateLink',
   'setFlag', 'setDeadline', 'clearDeadline', 'setEffort', 'setSteps', 'reanalyzeMissingPlans', 'acceptSuggestion',
+  'setCountries', 'addRefLink', 'removeRefLink', 'reanalyzeMissingCountries',
   'moveLink', 'deleteLink', 'retry', 'createCollection', 'renameCollection', 'deleteCollection', 'openUrl',
   'shareLink', 'copyText', 'readClipboard', 'saveSettings', 'setApiKey', 'testApiKey', 'exportData', 'importData',
   'deleteAllData', 'signIn', 'signOut', 'syncNow', 'toast'];

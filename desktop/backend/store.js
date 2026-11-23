@@ -15,10 +15,10 @@ const SYNC_LINK_FIELDS = ['url', 'shared_text', 'source_app', 'saved_at', 'statu
   'page_title', 'summary', 'content_type', 'topic', 'tags', 'action_label', 'suggested_new_name', 'confidence',
   'reviewed', 'favorite', 'archived', 'notes', 'error', 'site_name', 'image_url', 'analyzed_at', 'title_locked',
   'tags_locked', 'action_locked', 'deadline_at', 'deadline_has_time', 'deadline_source', 'deadline_locked',
-  'remind_days', 'effort_days', 'effort_locked', 'steps', 'steps_locked', 'origin'];
+  'remind_days', 'effort_days', 'effort_locked', 'steps', 'steps_locked', 'origin', 'countries', 'countries_locked', 'ref_links'];
 
 const INT_FIELDS = new Set(['reviewed', 'favorite', 'archived', 'title_locked', 'tags_locked', 'action_locked',
-  'deadline_has_time', 'deadline_locked', 'remind_days', 'effort_locked', 'steps_locked']);
+  'deadline_has_time', 'deadline_locked', 'remind_days', 'effort_locked', 'steps_locked', 'countries_locked']);
 
 /** "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM" to local epoch ms; a date alone means 23:59. */
 function parseDeadline(text) {
@@ -48,7 +48,8 @@ function blankLink() {
     confidence: null, reviewed: 0, favorite: 0, archived: 0, notes: null, error: null, attempts: 0, next_attempt_at: 0,
     site_name: null, image_url: null, analyzed_at: null, title_locked: 0, tags_locked: 0, action_locked: 0,
     deadline_at: null, deadline_has_time: 0, deadline_source: null, deadline_locked: 0, remind_days: 0, reminded: 0,
-    effort_days: null, effort_locked: 0, steps: [], steps_locked: 0, uid: null, origin: null, dirty: 1
+    effort_days: null, effort_locked: 0, steps: [], steps_locked: 0, uid: null, origin: null, dirty: 1,
+    countries: [], countries_locked: 0, ref_links: []
   };
 }
 
@@ -69,6 +70,11 @@ class Store {
       const raw = JSON.parse(fs.readFileSync(this.file, 'utf8'));
       Object.assign(this.data, raw);
     } catch (e) { /* first run */ }
+    for (const l of this.data.links) {
+      if (!Array.isArray(l.countries)) l.countries = [];
+      if (!Array.isArray(l.ref_links)) l.ref_links = [];
+      if (l.countries_locked == null) l.countries_locked = 0;
+    }
     if (!this.data.prefs.deviceId) {
       this.data.prefs.deviceId = crypto.randomUUID();
       this.saveNow();
@@ -267,6 +273,20 @@ class Store {
     return n;
   }
 
+  requeueMissingCountries() {
+    const now = Date.now();
+    let n = 0;
+    for (const l of this.data.links) {
+      if (['opportunity', 'event', 'course'].includes(l.content_type) && !(l.countries || []).length && !l.countries_locked
+          && !l.archived && ['analyzed', 'partial', 'failed'].includes(l.status)) {
+        Object.assign(l, { status: 'queued', attempts: 0, next_attempt_at: 0, error: null, origin: this.deviceId(), dirty: 1, updated_at: now });
+        n++;
+      }
+    }
+    if (n) this.localChange();
+    return n;
+  }
+
   pendingReminders() {
     return this.data.links.filter((l) => l.remind_days > 0 && !l.reminded && l.deadline_at != null && !l.archived).map((l) => this.getLink(l.id));
   }
@@ -402,6 +422,8 @@ class Store {
       Object.assign(l, { id: this.data.nextLinkId++, normalized_url: norm, uid: crypto.randomUUID(), origin: this.deviceId(), dirty: 1 });
       if (!Array.isArray(l.tags)) l.tags = [];
       if (!Array.isArray(l.steps)) l.steps = [];
+      if (!Array.isArray(l.countries)) l.countries = [];
+      if (!Array.isArray(l.ref_links)) l.ref_links = [];
       this.data.links.push(l);
       added++;
     }
@@ -496,7 +518,7 @@ class Store {
     const row = local || Object.assign(blankLink(), { id: this.data.nextLinkId++ });
     for (const f of SYNC_LINK_FIELDS) {
       let v = data[f];
-      if (v === undefined || v === null) v = f === 'tags' || f === 'steps' ? [] : INT_FIELDS.has(f) ? 0 : null;
+      if (v === undefined || v === null) v = ['tags', 'steps', 'countries', 'ref_links'].includes(f) ? [] : INT_FIELDS.has(f) ? 0 : null;
       if (typeof v === 'boolean') v = v ? 1 : 0;
       row[f] = v;
     }

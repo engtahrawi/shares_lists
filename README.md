@@ -29,6 +29,13 @@ Save links from any app, then let Claude brief, tag and file them.
   list is grouped into Start today, This week, Later and Missed. A warning appears when the work due by a date
   exceeds the days left. On each opportunity a collapsible **Your plan** section holds the estimate (editable)
   and a checklist of steps. Home shows the first three under **Up next**; Search moved to the top of Home.
+- **Countries**: Claude labels opportunities, events and courses with the countries where they take place
+  (ISO codes, or Online / anywhere). The Collections tab switches between Collections and Countries; each
+  country lists its opportunities by deadline with an Open / All filter. Tap the country label on a link to
+  change it (your choice is never overwritten). Opportunities saved earlier can be analyzed again in one tap.
+- **Reference links**: add up to 5 pages (official call, guidelines, FAQ) to an opportunity in its collapsible
+  Reference links section. Claude reads them with the saved link and updates the brief, deadline, country and
+  plan; each link shows whether it was read or needs a login.
 - **Home** shows only collections that hold links; empty ones stay in the Collections tab.
 - **Collections**, **Favorites**, **Archive**, **Search** (title, brief, tags, URL, collection, notes;
   Arabic-aware) with source and status filters, **Retry** and **Add context** for failed analyses.
