@@ -5,3 +5,6 @@ local.properties
 .idea/
 *.jks
 *.keystore
+desktop/node_modules/
+desktop/web/
+desktop/dist/

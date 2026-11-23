@@ -29,6 +29,8 @@
     heart: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>',
     heartOn: '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>',
     check: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>',
+    bookmark: '<svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M7 3h10a2 2 0 0 1 2 2v16l-7-3.8L5 21V5a2 2 0 0 1 2-2z"/></svg>',
+    plusSm: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
     planner: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4M8 14h3M8 17h6"/></svg>',
     chevron: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
     searchSm: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>',
@@ -43,13 +45,18 @@
   var searchState = { q: '', filter: 'all' };
   var addState = { url: '', context: '', copy: false, dup: null, error: '' };
   var planOpen = {};
+  var desk = false;
+  var paneId = null;
   var showMissed = false;
   var callbacks = {};
   var callbackSeq = 1;
 
   function load() {
     try { S = JSON.parse(SM.getState()); } catch (e) { /* keep last state */ }
+    desk = S.platform === 'mac';
+    document.body.classList.toggle('desk', desk);
   }
+  function deviceWord() { return desk ? 'Mac' : 'phone'; }
 
   function linkById(id) {
     for (var i = 0; i < S.links.length; i++) if (S.links[i].id === id) return S.links[i];
@@ -432,6 +439,14 @@
   function current() { return nav[nav.length - 1]; }
 
   function go(route, replace) {
+    if (desk && route.indexOf('#/link/') === 0) {
+      paneId = Number(route.slice(7));
+      if (replace && current() === '#/add') nav.pop();
+      if (!nav.length) nav = ['#/home'];
+      closeSheet();
+      render(true);
+      return;
+    }
     if (replace) nav[nav.length - 1] = route;
     else if (current() !== route) nav.push(route);
     closeSheet();
@@ -444,6 +459,7 @@
   }
   function back() {
     if (closeSheet()) return true;
+    if (desk && paneId !== null) { paneId = null; render(false); return true; }
     if (nav.length > 1) { nav.pop(); render(true); return true; }
     if (current() !== '#/home') { nav = ['#/home']; render(true); return true; }
     return false;
@@ -452,6 +468,11 @@
   var scrollMemo = {};
   function render(navigated) {
     var view = document.getElementById('view');
+    if (desk && current().indexOf('#/link/') === 0) {
+      paneId = Number(current().slice(7));
+      nav.pop();
+      if (!nav.length) nav = ['#/home'];
+    }
     var route = current();
     if (!navigated) scrollMemo[route] = view.scrollTop;
     var parts = route.split('/');
@@ -477,11 +498,98 @@
     if (name === 'settings') bindSettings();
     view.scrollTop = navigated ? (scrollMemo[route] && nav.indexOf(route) < nav.length - 1 ? scrollMemo[route] : 0) : scrollMemo[route] || 0;
     if (navigated) scrollMemo[route] = 0;
+    if (desk) { renderSide(); renderPane(); }
     dirty = false;
+  }
+
+  // ------------------------------------------------------------ Mac layout
+
+  function renderSide() {
+    var side = document.getElementById('side');
+    side.hidden = false;
+    var route = current();
+    var pending = inboxItems().length;
+    function item(r, label, icon, extra) {
+      var on = route === r;
+      return '<button class="sitem' + (on ? ' on' : '') + '" data-tab="' + r + '"' + (on ? ' aria-current="page"' : '') + '>' + icon
+        + '<span class="grow">' + label + '</span>' + (extra || '') + '</button>';
+    }
+    var h = '<div class="sbrand"><span class="slogo">' + I.bookmark + '</span><span>SaveMind</span></div>'
+      + '<button class="btn pri" data-act="add" style="min-height:38px;width:100%">' + I.plusSm + ' Add link</button>'
+      + '<button class="ssearch" data-act="search">' + I.searchSm + '<span class="grow">Search</span><span class="src">⌘K</span></button>'
+      + item('#/home', 'Home', I.home)
+      + item('#/inbox', 'Smart Inbox', I.inbox, pending ? '<span class="sbadge">' + pending + '</span>' : '')
+      + item('#/planner', 'Planner', I.planner)
+      + '<span class="slabel">Collections</span>';
+    S.collections.slice().sort(function (a, b) { return countIn(b.id) - countIn(a.id); }).forEach(function (c) {
+      var col = colorOf(c);
+      var r = '#/c/' + c.id;
+      h += '<button class="sitem small' + (route === r ? ' on' : '') + '" data-tab="' + r + '"><span class="sdot" style="background:' + col[1] + '"></span>'
+        + '<span class="grow" dir="auto">' + esc(c.name) + '</span><span class="src">' + countIn(c.id) + '</span></button>';
+    });
+    h += '<button class="sitem small' + (route === '#/c/inbox' ? ' on' : '') + '" data-tab="#/c/inbox"><span class="sdot" style="background:var(--line-2)"></span><span class="grow">Inbox</span><span class="src">' + countIn(null) + '</span></button>'
+      + '<button class="sitem small' + (route === '#/collections' ? ' on' : '') + '" data-tab="#/collections"><span class="sdot" style="background:transparent"></span><span class="grow">All collections…</span></button>';
+    var acc = S.account || {};
+    var status = !acc.available ? 'Sync not set up' : !acc.signedIn ? 'Not signed in' : acc.syncing ? 'Syncing…'
+      : acc.error ? 'Sync paused' : acc.lastSync ? 'Synced ' + ago(acc.lastSync) : 'Waiting to sync';
+    var good = acc.signedIn && !acc.error;
+    h += '<div style="flex:1"></div><button class="saccount" data-act="settings"><span class="avatar" style="width:32px;height:32px;font-size:14px">'
+      + esc(initials(S.settings.name || 'A').charAt(0)) + '</span><span class="col grow" style="gap:1px"><span class="t" style="font-size:13px" dir="auto">' + esc(S.settings.name || '')
+      + '</span><span class="src" style="color:' + (good ? 'var(--green)' : 'var(--muted-2)') + ';font-weight:600">' + (good ? '● ' : '') + esc(status) + '</span></span></button>';
+    side.innerHTML = h;
+  }
+
+  function renderPane() {
+    var pane = document.getElementById('pane');
+    pane.hidden = false;
+    var keep = pane.getAttribute('data-id') === String(paneId) ? pane.scrollTop : 0;
+    if (paneId === null || !linkById(paneId)) {
+      paneId = null;
+      pane.innerHTML = '<div class="empty" style="height:100%;justify-content:center"><div class="big">' + I.link + '</div><p class="t">Select a link</p><p class="s">Its brief, deadline and plan open here.</p></div>';
+      pane.removeAttribute('data-id');
+      return;
+    }
+    pane.innerHTML = viewLink(paneId);
+    pane.setAttribute('data-id', String(paneId));
+    pane.scrollTop = keep;
+    document.querySelectorAll('#view [data-act="open"]').forEach(function (b) {
+      b.classList.toggle('selected', Number(b.getAttribute('data-id')) === paneId);
+    });
+  }
+
+  var lastOffer = null;
+  /** On the Mac, offers to save a web link found on the clipboard (once per link). */
+  function offerClipboard() {
+    if (!desk) return;
+    var text = '';
+    try { text = SM.readClipboard(); } catch (e) { return; }
+    var url = text ? SM.validateUrl(text) : '';
+    var seen = '';
+    try { seen = localStorage.getItem('sm.offered') || ''; } catch (e) { /* storage unavailable */ }
+    if (!url || url === lastOffer || url === seen || SM.checkDuplicate(url) !== 'null') return;
+    lastOffer = url;
+    try { localStorage.setItem('sm.offered', url); } catch (e) { /* storage unavailable */ }
+    var old = document.querySelector('.offer');
+    if (old) old.remove();
+    var bar = document.createElement('div');
+    bar.className = 'offer';
+    bar.innerHTML = '<div class="col grow" style="gap:2px"><span class="t" style="font-size:14px">Save the link on your clipboard?</span><span class="src clamp2">'
+      + esc(shortUrl(url)) + '</span></div><button class="btn sec" data-offer="no">Not now</button><button class="btn pri" data-offer="yes">Save</button>';
+    document.body.appendChild(bar);
+    bar.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-offer]');
+      if (!b) return;
+      bar.remove();
+      if (b.getAttribute('data-offer') === 'yes') {
+        var res = JSON.parse(SM.addLink(url, '', false));
+        if (res.ok) { load(); toast('Saved. Claude is analyzing it.'); go('#/link/' + res.id); }
+      }
+    });
   }
 
   function renderTabs(active) {
     var tabs = document.getElementById('tabs');
+    if (desk) { tabs.hidden = true; return; }
     if (!active) { tabs.hidden = true; return; }
     tabs.hidden = false;
     var pending = inboxItems().length;
@@ -900,9 +1008,11 @@
     h += '<div class="group"><div class="item"><label class="lbl" for="setName">Your name</label>'
       + '<input id="setName" class="inp" dir="auto" maxlength="40" value="' + esc(st.name) + '"></div></div>';
 
+    h += accountSection();
+
     h += '<h3 class="h2">Claude</h3><div class="group"><div class="item">';
     h += '<div class="row between"><span class="lbl">API key</span>' + (st.hasKey ? '<span class="ok">Connected</span>' : '<span class="bad">Not connected</span>') + '</div>';
-    if (st.hasKey) h += '<span class="src">Saved key ' + esc(st.keyHint) + ', encrypted on this phone.</span>';
+    if (st.hasKey) h += '<span class="src">Saved key ' + esc(st.keyHint) + ', encrypted on this ' + deviceWord() + '. It is never synced.</span>';
     h += '<input id="setKey" class="inp" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="' + (st.hasKey ? 'Paste a new key to replace it' : 'sk-ant-…') + '">';
     h += '<div class="row"><button class="btn pri flex1" data-act="saveKey">Save key</button>'
       + (st.hasKey ? '<button class="btn sec flex1" data-act="testKey">Test</button><button class="btn danger" data-act="removeKey">Remove</button>' : '') + '</div>';
@@ -927,7 +1037,9 @@
     h += '<h3 class="h2">Usage</h3><div class="group"><div class="item" id="stats"><span class="s">Loading…</span></div></div>';
 
     h += '<h3 class="h2">Privacy &amp; data</h3><div class="group"><div class="item"><p class="s">'
-      + 'Your links, notes and collections are stored only on this phone. To analyze a link, SaveMind fetches the public page directly from your phone, '
+      + 'Your links, notes and collections are stored on this ' + deviceWord()
+      + ((S.account || {}).signedIn ? ' and in your SaveMind sync account (Supabase), where only you can read them. ' : '. ')
+      + 'To analyze a link, SaveMind fetches the public page directly from your ' + deviceWord() + ', '
       + 'then sends the extracted text, page details, any text you shared or wrote, and your collection names to Anthropic\'s Claude API using your key. '
       + 'Nothing is sent anywhere else. Pages behind a login cannot be read, and summaries say when information was limited.</p></div>'
       + '<div class="item"><div class="row"><button class="btn sec flex1" data-act="export">Export backup</button><button class="btn sec flex1" data-act="import">Import backup</button></div></div>'
@@ -935,6 +1047,55 @@
 
     h += '<p class="src" style="text-align:center">SaveMind ' + esc(S.version || '') + ' · Built to the SaveMind PRD v1.0</p>';
     return h + '</div>';
+  }
+
+  function accountSection() {
+    var acc = S.account || {};
+    var h = '<h3 class="h2">Account &amp; sync</h3><div class="group"><div class="item">';
+    if (!acc.available) {
+      return h + '<p class="s">Sync is not set up in this build.</p></div></div>';
+    }
+    if (acc.signedIn) {
+      var status = acc.syncing ? 'Syncing…' : acc.error ? acc.error : acc.lastSync ? 'Synced ' + ago(acc.lastSync) : 'Waiting to sync';
+      h += '<div class="row"><span class="avatar">' + esc((acc.email || 'A').charAt(0).toUpperCase()) + '</span><div class="col grow">'
+        + '<span class="t" style="font-size:14px">' + esc(acc.email) + '</span><span class="src" style="font-weight:600;color:' + (acc.error ? 'var(--red)' : 'var(--green)') + '">'
+        + (acc.error ? '' : '● ') + esc(status) + '</span></div></div>'
+        + '<div class="row"><button class="btn sec flex1" data-act="syncNow">Sync now</button><button class="btn danger flex1" data-act="signOut">Sign out</button></div>';
+      return h + '</div></div>';
+    }
+    h += '<div class="row" style="gap:12px;align-items:flex-start"><div class="tile" style="width:44px;height:44px;border-radius:14px;background:var(--blue-soft);color:var(--blue);flex:none">⇄</div>'
+      + '<div class="col"><span class="t">Sync with your ' + (desk ? 'phone' : 'Mac') + '</span><span class="s">Sign in with the same email on both devices to keep everything in step.</span></div></div>'
+      + '<label class="lbl" for="accEmail">Email</label><input id="accEmail" class="inp" type="email" autocomplete="username" autocapitalize="off" spellcheck="false">'
+      + '<label class="lbl" for="accPass">Password</label><input id="accPass" class="inp" type="password" autocomplete="current-password">'
+      + '<div class="row"><button class="btn sec flex1" data-act="signUp">Create account</button><button class="btn pri flex1" data-act="signIn">Sign in</button></div>'
+      + '<span id="authResult" class="src"></span>'
+      + '<p class="src">The links on this ' + deviceWord() + ' are uploaded to your account the first time you sign in. Your Claude API key stays on this ' + deviceWord() + '.</p>';
+    return h + '</div></div>';
+  }
+
+  function auth(create) {
+    var email = document.getElementById('accEmail').value.trim();
+    var pass = document.getElementById('accPass').value;
+    var out = document.getElementById('authResult');
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { out.className = 'bad'; out.textContent = 'Enter a valid email address.'; return; }
+    if (pass.length < 6) { out.className = 'bad'; out.textContent = 'The password needs at least 6 characters.'; return; }
+    out.className = 'src';
+    out.textContent = create ? 'Creating your account…' : 'Signing in…';
+    var id = callbackSeq++;
+    callbacks[id] = function (raw) {
+      var r = {};
+      try { r = JSON.parse(raw); } catch (e) { r = { ok: false, error: 'Unexpected answer.' }; }
+      var o = document.getElementById('authResult');
+      if (r.ok && r.needsConfirm) {
+        if (o) { o.className = 'ok'; o.textContent = 'Account created. Open the confirmation link sent to ' + email + ', then sign in here.'; }
+      } else if (r.ok) {
+        toast('Signed in. Syncing…');
+        load(); render(false);
+      } else if (o) {
+        o.className = 'bad'; o.textContent = r.error || 'Sign-in failed.';
+      }
+    };
+    SM.signIn(email, pass, !!create, id);
   }
 
   function bindSettings() {
@@ -1261,7 +1422,16 @@
         break;
       case 'collectionMenu': collectionMenu(id); break;
       case 'deadline': closeSheet(); deadlineSheet(id); break;
-      case 'search': go('#/search'); break;
+      case 'search': goTab('#/search'); setTimeout(function () { var q = document.getElementById('q'); if (q) q.focus(); }, 30); break;
+      case 'signIn': auth(false); break;
+      case 'signUp': auth(true); break;
+      case 'syncNow': SM.syncNow(); toast('Syncing…'); break;
+      case 'signOut':
+        confirmSheet('Sign out?', 'Your links stay on this ' + deviceWord() + ' and in your account. This ' + deviceWord() + ' stops syncing until you sign in again.', 'Sign out', function () {
+          SM.signOut();
+          toast('Signed out');
+        });
+        break;
       case 'toggleMissed': showMissed = !showMissed; render(false); break;
       case 'planToggle': planOpen[id] = !planOpen[id]; render(false); break;
       case 'planReanalyze':
@@ -1319,7 +1489,9 @@
       case 'export': SM.exportData(); break;
       case 'import': SM.importData(); break;
       case 'deleteAll':
-        confirmSheet('Delete all data?', 'Every saved link, note and collection is removed from this phone. Export a backup first if you may need them.', 'Delete everything', function () {
+        confirmSheet('Delete all data?', (S.account && S.account.signedIn
+          ? 'Every saved link, note and collection is removed from this ' + deviceWord() + ' and from your synced account, so your other devices lose them too.'
+          : 'Every saved link, note and collection is removed from this ' + deviceWord() + '.') + ' Export a backup first if you may need them.', 'Delete everything', function () {
           SM.deleteAllData(false);
           toast('All data deleted');
           goTab('#/home');
@@ -1380,6 +1552,8 @@
     changed: function () {
       load();
       var route = current();
+      if (desk && !document.getElementById('overlay').innerHTML && route !== '#/add' && !typing()) { render(false); return; }
+      if (desk) { renderSide(); }
       if (document.getElementById('overlay').innerHTML || route === '#/add') { dirty = true; renderTabs(document.getElementById('tabs').hidden ? null : tabOf(route)); return; }
       if (route === '#/search') { renderTabs('search'); renderResults(); return; }
       if (route === '#/settings') { if (!typing()) render(false); else dirty = true; return; }
@@ -1387,6 +1561,7 @@
     },
     go: function (route) { nav = ['#/home']; if (route !== '#/home') nav.push(route); closeSheet(); render(true); },
     back: back,
+    toast: function (msg) { toast(msg); },
     callback: function (id, result) { var cb = callbacks[id]; delete callbacks[id]; if (cb) cb(result); }
   };
 
@@ -1401,8 +1576,26 @@
 
   // ------------------------------------------------------------------- boot
 
+  document.addEventListener('dragover', function (e) { e.preventDefault(); });
+  document.addEventListener('drop', function (e) {
+    e.preventDefault();
+    var dt = e.dataTransfer;
+    var text = dt ? (dt.getData('text/uri-list') || dt.getData('text/plain') || '') : '';
+    var url = text ? SM.validateUrl(text.split('\n')[0]) : '';
+    if (!url) { toast('Drop a web link to save it'); return; }
+    addState = { url: url, context: '', copy: false, dup: null, error: '' };
+    go('#/add');
+  });
+  document.addEventListener('keydown', function (e) {
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); doAction('search', 0, null); }
+    else if ((e.metaKey || e.ctrlKey) && (e.key === 'n' || e.key === 'N')) { e.preventDefault(); doAction('add', 0, null); }
+    else if (e.key === 'Escape' && desk) { back(); }
+  });
+  window.addEventListener('focus', function () { setTimeout(offerClipboard, 200); });
+
   load();
   var initial = location.hash;
   if (initial && initial.indexOf('#/') === 0 && initial !== '#/home') nav.push(initial);
   render(true);
+  setTimeout(offerClipboard, 600);
 })();

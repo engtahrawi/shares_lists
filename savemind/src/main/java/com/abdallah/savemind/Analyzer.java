@@ -66,7 +66,7 @@ final class Analyzer {
         Prefs prefs = new Prefs(app);
         String key = prefs.apiKey();
         if (key == null) {
-            markWaitingForKey(db);
+            markWaitingForKey(db, prefs.deviceId());
             return;
         }
         while (true) {
@@ -78,13 +78,14 @@ final class Analyzer {
         if (next > 0) scheduleJob(app, Math.max(0, next - System.currentTimeMillis()));
     }
 
-    private static void markWaitingForKey(Db db) {
+    private static void markWaitingForKey(Db db, String deviceId) {
         ContentValues v = new ContentValues();
         v.put("error", ERR_NEEDS_KEY);
         JSONArray links = db.allLinks();
         for (int i = 0; i < links.length(); i++) {
             JSONObject l = links.optJSONObject(i);
-            if (Db.ST_QUEUED.equals(l.optString("status")) && !ERR_NEEDS_KEY.equals(l.optString("error"))) {
+            boolean mine = l.isNull("origin") || deviceId.equals(l.optString("origin"));
+            if (mine && Db.ST_QUEUED.equals(l.optString("status")) && !ERR_NEEDS_KEY.equals(l.optString("error"))) {
                 db.updateLink(l.optLong("id"), new ContentValues(v));
             }
         }

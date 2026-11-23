@@ -132,9 +132,27 @@ public class MainActivity extends Activity {
         js("window.SMNative && SMNative.go(" + JSONObject.quote(route) + ")");
     }
 
+    private final android.os.Handler poller = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable poll = new Runnable() {
+        @Override
+        public void run() {
+            Sync.requestSoon(MainActivity.this);
+            poller.postDelayed(this, 20_000);
+        }
+    };
+
+    @Override
+    protected void onPause() {
+        poller.removeCallbacks(poll);
+        super.onPause();
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
+        poller.removeCallbacks(poll);
+        poller.post(poll);
+        if (new Prefs(this).signedIn()) Sync.schedulePeriodic(this);
         Analyzer.kick(this);
         if (pageReady) onDataChanged.run();
     }
@@ -296,6 +314,15 @@ public class MainActivity extends Activity {
                 settings.put("hasKey", p.hasApiKey());
                 settings.put("keyHint", p.apiKeyHint());
                 o.put("settings", settings);
+                JSONObject account = new JSONObject();
+                account.put("available", SyncConfig.configured());
+                account.put("signedIn", p.signedIn());
+                account.put("email", p.accountEmail());
+                account.put("lastSync", p.lastSync());
+                account.put("syncing", Sync.isRunning());
+                account.put("error", p.syncError() == null ? JSONObject.NULL : p.syncError());
+                o.put("account", account);
+                o.put("platform", "android");
                 o.put("version", appVersion());
             } catch (JSONException ignored) {
                 // not reachable
@@ -544,6 +571,7 @@ public class MainActivity extends Activity {
             v.put("attempts", 0);
             v.put("next_attempt_at", 0);
             v.putNull("error");
+            v.put("origin", prefs().deviceId());
             db().updateLink(id, v);
             Analyzer.kick(MainActivity.this);
         }
@@ -684,6 +712,28 @@ public class MainActivity extends Activity {
             db().deleteAll();
             if (includeKey) prefs().setApiKey(null);
             ChangeBus.post();
+        }
+
+        @JavascriptInterface
+        public void signIn(final String email, final String password, final boolean create, final int callbackId) {
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    Sync.Result r = create ? Sync.signUp(MainActivity.this, email, password)
+                            : Sync.signIn(MainActivity.this, email, password);
+                    callback(callbackId, r.toJson());
+                }
+            }).start();
+        }
+
+        @JavascriptInterface
+        public void signOut() {
+            Sync.signOut(MainActivity.this);
+        }
+
+        @JavascriptInterface
+        public void syncNow() {
+            Sync.runAsync(MainActivity.this, null);
         }
 
         @JavascriptInterface

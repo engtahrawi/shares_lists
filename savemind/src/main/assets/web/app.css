@@ -231,3 +231,35 @@ textarea.inp { height: auto; min-height: 96px; padding: 12px 14px; resize: none;
 .pcheck { width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--line-2); background: #fff; color: #fff; font-size: 13px; font-weight: 800; display: flex; align-items: center; justify-content: center; padding: 0; flex: none; }
 .pcheck.on { background: var(--blue); border-color: var(--blue); }
 .pdel { border: 0; background: none; color: var(--muted-2); font-size: 20px; width: 32px; height: 32px; flex: none; }
+
+/* Account */
+.group .avatar { flex: none; }
+
+/* Mac layout: sidebar, list and detail side by side */
+body.desk #app { flex-direction: row; }
+body.desk #side { display: flex; flex-direction: column; gap: 4px; width: 240px; flex: none; background: #fff; border-right: 1px solid var(--line); padding: 18px 14px; overflow-y: auto; }
+body.desk #view { flex: none; width: 440px; border-right: 1px solid var(--line); }
+body.desk #pane { display: block; flex: 1; min-width: 0; overflow-y: auto; position: relative; }
+body.desk #pane .body.with-bar { padding-bottom: 20px; }
+body.desk #pane .bottombar { position: sticky; bottom: 0; }
+body.desk #pane .dhead { padding-top: 18px; }
+body.desk .scrim { align-items: center; justify-content: center; }
+body.desk .sheet { max-width: 460px; border-radius: 20px; }
+body.desk .sheet .handle { display: none; }
+body.desk .toast { bottom: 28px; }
+body.desk .selected { box-shadow: inset 3px 0 0 var(--blue); background: var(--blue-wash); }
+.sbrand { display: flex; align-items: center; gap: 10px; padding: 0 6px 12px; font-family: var(--display); font-size: 18px; font-weight: 800; }
+.slogo { width: 30px; height: 30px; border-radius: 8px; background: var(--blue); display: flex; align-items: center; justify-content: center; }
+.ssearch { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 0; border-radius: 10px; padding: 0 10px; height: 36px; margin: 8px 0 10px; color: var(--muted-2); font-size: 13px; text-align: start; }
+.sitem { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; font-size: 14px; font-weight: 600; border: 0; background: none; text-align: start; width: 100%; color: var(--ink); }
+.sitem:hover { background: var(--bg); }
+.sitem.on { background: var(--blue-soft); color: var(--blue); font-weight: 700; }
+.sitem.small { font-weight: 500; padding: 7px 10px; }
+.sitem svg { width: 18px; height: 18px; }
+.sdot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.sbadge { font-size: 11px; font-weight: 700; background: var(--blue); color: #fff; border-radius: 8px; padding: 1px 7px; }
+.slabel { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted-2); padding: 16px 10px 4px; }
+.saccount { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 12px; background: var(--bg); border: 0; text-align: start; width: 100%; }
+.offer { position: fixed; right: 24px; bottom: 24px; z-index: 70; background: #fff; border-radius: 16px; box-shadow: 0 10px 30px rgba(22,24,29,.2); padding: 14px; display: flex; align-items: center; gap: 10px; width: 420px; max-width: calc(100% - 48px); }
+body.desk #side { padding-top: 44px; -webkit-app-region: drag; }
+body.desk #side button, body.desk #side input { -webkit-app-region: no-drag; }

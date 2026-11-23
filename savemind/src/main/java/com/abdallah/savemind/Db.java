@@ -34,8 +34,22 @@ final class Db extends SQLiteOpenHelper {
             "next_attempt_at", "site_name", "image_url", "analyzed_at", "title_locked",
             "tags_locked", "action_locked", "page_title", "deadline_at", "deadline_has_time",
             "deadline_source", "deadline_locked", "remind_days", "reminded", "effort_days",
-            "effort_locked", "steps", "steps_locked"
+            "effort_locked", "steps", "steps_locked", "uid", "origin", "dirty"
     };
+
+    /** Link fields shared with other devices (plus "collection" and "suggested_collection" uids). */
+    static final String[] SYNC_LINK_FIELDS = {
+            "url", "shared_text", "source_app", "saved_at", "status", "source_level", "title",
+            "page_title", "summary", "content_type", "topic", "tags", "action_label",
+            "suggested_new_name", "confidence", "reviewed", "favorite", "archived", "notes", "error",
+            "site_name", "image_url", "analyzed_at", "title_locked", "tags_locked", "action_locked",
+            "deadline_at", "deadline_has_time", "deadline_source", "deadline_locked", "remind_days",
+            "effort_days", "effort_locked", "steps", "steps_locked", "origin"
+    };
+
+    /** Columns that never come from a backup file or another device as-is. */
+    private static final java.util.Set<String> IMPORT_SKIP = new java.util.HashSet<>(
+            java.util.Arrays.asList("id", "uid", "dirty", "origin"));
 
     private static Db instance;
 
@@ -44,8 +58,21 @@ final class Db extends SQLiteOpenHelper {
         return instance;
     }
 
+    private final Context app;
+
     private Db(Context context) {
-        super(context, "savemind.db", null, 3);
+        super(context, "savemind.db", null, 4);
+        app = context;
+    }
+
+    /** A local edit: refresh open screens and schedule a sync. */
+    private void localChange() {
+        ChangeBus.post();
+        Sync.requestSoon(app);
+    }
+
+    static String newUid() {
+        return java.util.UUID.randomUUID().toString();
     }
 
     @Override
@@ -92,6 +119,7 @@ final class Db extends SQLiteOpenHelper {
                 + "action_locked INTEGER NOT NULL DEFAULT 0)");
         addDeadlineColumns(db);
         addPlanColumns(db);
+        addSyncColumns(db);
         db.execSQL("CREATE INDEX idx_links_norm ON links(normalized_url)");
         db.execSQL("CREATE INDEX idx_links_status ON links(status)");
         db.execSQL("CREATE TABLE analysis_runs ("
@@ -112,6 +140,38 @@ final class Db extends SQLiteOpenHelper {
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         if (oldVersion < 2) addDeadlineColumns(db);
         if (oldVersion < 3) addPlanColumns(db);
+        if (oldVersion < 4) addSyncColumns(db);
+    }
+
+    /**
+     * Version 4: sync. uid is the item's id on every device; dirty marks local changes not yet
+     * uploaded; origin is the device that saved a link (only it analyzes the link automatically);
+     * tombstones remember deletions until they are uploaded.
+     */
+    private static void addSyncColumns(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE links ADD COLUMN uid TEXT");
+        db.execSQL("ALTER TABLE links ADD COLUMN origin TEXT");
+        db.execSQL("ALTER TABLE links ADD COLUMN dirty INTEGER NOT NULL DEFAULT 1");
+        db.execSQL("ALTER TABLE collections ADD COLUMN uid TEXT");
+        db.execSQL("ALTER TABLE collections ADD COLUMN updated_at INTEGER");
+        db.execSQL("ALTER TABLE collections ADD COLUMN dirty INTEGER NOT NULL DEFAULT 1");
+        db.execSQL("CREATE TABLE IF NOT EXISTS tombstones (uid TEXT PRIMARY KEY, kind TEXT NOT NULL, "
+                + "deleted_at INTEGER NOT NULL)");
+        for (String table : new String[]{"links", "collections"}) {
+            Cursor c = db.rawQuery("SELECT id FROM " + table + " WHERE uid IS NULL", null);
+            try {
+                while (c.moveToNext()) {
+                    ContentValues v = new ContentValues();
+                    v.put("uid", newUid());
+                    db.update(table, v, "id = ?", new String[]{String.valueOf(c.getLong(0))});
+                }
+            } finally {
+                c.close();
+            }
+        }
+        db.execSQL("UPDATE collections SET updated_at = created_at WHERE updated_at IS NULL");
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_links_uid ON links(uid)");
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_collections_uid ON collections(uid)");
     }
 
     /** Version 3: the Planner's work estimate (days) and preparation steps ([{"t":text,"d":0|1}]). */
@@ -148,8 +208,11 @@ final class Db extends SQLiteOpenHelper {
         v.put("status", ST_QUEUED);
         v.put("site_name", UrlUtil.siteName(domain));
         v.put("notes", emptyToNull(notes));
+        v.put("uid", newUid());
+        v.put("origin", new Prefs(app).deviceId());
+        v.put("dirty", 1);
         long id = getWritableDatabase().insert("links", null, v);
-        ChangeBus.post();
+        localChange();
         return id;
     }
 
@@ -238,15 +301,32 @@ final class Db extends SQLiteOpenHelper {
 
     void updateLink(long id, ContentValues v) {
         v.put("updated_at", System.currentTimeMillis());
+        v.put("dirty", 1);
         getWritableDatabase().update("links", v, "id = ?", new String[]{String.valueOf(id)});
-        ChangeBus.post();
+        localChange();
     }
 
     void deleteLink(long id) {
         SQLiteDatabase db = getWritableDatabase();
+        tombstone(db, "links", "link", id);
         db.delete("links", "id = ?", new String[]{String.valueOf(id)});
         db.delete("analysis_runs", "link_id = ?", new String[]{String.valueOf(id)});
-        ChangeBus.post();
+        localChange();
+    }
+
+    private static void tombstone(SQLiteDatabase db, String table, String kind, long id) {
+        Cursor c = db.rawQuery("SELECT uid FROM " + table + " WHERE id = ?", new String[]{String.valueOf(id)});
+        try {
+            if (c.moveToFirst() && !c.isNull(0)) {
+                ContentValues t = new ContentValues();
+                t.put("uid", c.getString(0));
+                t.put("kind", kind);
+                t.put("deleted_at", System.currentTimeMillis());
+                db.insertWithOnConflict("tombstones", null, t, SQLiteDatabase.CONFLICT_REPLACE);
+            }
+        } finally {
+            c.close();
+        }
     }
 
     /**
@@ -259,6 +339,7 @@ final class Db extends SQLiteOpenHelper {
         db.beginTransaction();
         try {
             Cursor c = db.rawQuery("SELECT id FROM links WHERE status = ? AND next_attempt_at <= ? "
+                    + "AND (origin IS NULL OR origin = '" + new Prefs(app).deviceId().replace("'", "") + "') "
                     + "ORDER BY saved_at ASC LIMIT 1", new String[]{ST_QUEUED, String.valueOf(now)});
             long id;
             try {
@@ -283,7 +364,8 @@ final class Db extends SQLiteOpenHelper {
     /** Earliest scheduled retry among queued links, or -1 when nothing is queued. */
     long nextQueuedAttemptAt() {
         Cursor c = getReadableDatabase().rawQuery(
-                "SELECT MIN(next_attempt_at) FROM links WHERE status = ?", new String[]{ST_QUEUED});
+                "SELECT MIN(next_attempt_at) FROM links WHERE status = ? AND (origin IS NULL OR origin = ?)",
+                new String[]{ST_QUEUED, new Prefs(app).deviceId()});
         try {
             return c.moveToFirst() && !c.isNull(0) ? c.getLong(0) : -1;
         } finally {
@@ -339,6 +421,9 @@ final class Db extends SQLiteOpenHelper {
     /** Open links with a future deadline but no work estimate, for a one-tap re-analysis. */
     int requeueMissingPlans() {
         ContentValues v = new ContentValues();
+        v.put("origin", new Prefs(app).deviceId());
+        v.put("dirty", 1);
+        v.put("updated_at", System.currentTimeMillis());
         v.put("status", ST_QUEUED);
         v.put("attempts", 0);
         v.put("next_attempt_at", 0);
@@ -347,7 +432,7 @@ final class Db extends SQLiteOpenHelper {
                 "deadline_at IS NOT NULL AND deadline_at > ? AND effort_days IS NULL AND archived = 0 "
                         + "AND status IN ('analyzed', 'partial', 'failed')",
                 new String[]{String.valueOf(System.currentTimeMillis())});
-        if (n > 0) ChangeBus.post();
+        if (n > 0) localChange();
         return n;
     }
 
@@ -391,8 +476,11 @@ final class Db extends SQLiteOpenHelper {
         v.put("name", clean);
         v.put("color", (int) (count % COLLECTION_COLORS));
         v.put("created_at", System.currentTimeMillis());
+        v.put("updated_at", System.currentTimeMillis());
+        v.put("uid", newUid());
+        v.put("dirty", 1);
         long id = db.insert("collections", null, v);
-        ChangeBus.post();
+        localChange();
         return id;
     }
 
@@ -433,8 +521,10 @@ final class Db extends SQLiteOpenHelper {
         if (other > 0 && other != id) return false;
         ContentValues v = new ContentValues();
         v.put("name", clean.length() > 60 ? clean.substring(0, 60) : clean);
+        v.put("updated_at", System.currentTimeMillis());
+        v.put("dirty", 1);
         getWritableDatabase().update("collections", v, "id = ?", new String[]{String.valueOf(id)});
-        ChangeBus.post();
+        localChange();
         return true;
     }
 
@@ -443,18 +533,24 @@ final class Db extends SQLiteOpenHelper {
         SQLiteDatabase db = getWritableDatabase();
         db.beginTransaction();
         try {
+            long now = System.currentTimeMillis();
             ContentValues v = new ContentValues();
             v.putNull("collection_id");
+            v.put("updated_at", now);
+            v.put("dirty", 1);
             db.update("links", v, "collection_id = ?", new String[]{String.valueOf(id)});
             ContentValues s = new ContentValues();
             s.putNull("suggested_collection_id");
+            s.put("updated_at", now);
+            s.put("dirty", 1);
             db.update("links", s, "suggested_collection_id = ?", new String[]{String.valueOf(id)});
+            tombstone(db, "collections", "collection", id);
             db.delete("collections", "id = ?", new String[]{String.valueOf(id)});
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();
         }
-        ChangeBus.post();
+        localChange();
     }
 
     /**
@@ -603,7 +699,7 @@ final class Db extends SQLiteOpenHelper {
                     if (exists) continue;
                     ContentValues v = new ContentValues();
                     for (String col : LINK_COLUMNS) {
-                        if (col.equals("id") || !l.has(col) || l.isNull(col)) continue;
+                        if (IMPORT_SKIP.contains(col) || !l.has(col) || l.isNull(col)) continue;
                         Object val = l.get(col);
                         if (col.equals("collection_id") || col.equals("suggested_collection_id")) {
                             Long mapped = idMap.get(l.optLong(col));
@@ -625,6 +721,9 @@ final class Db extends SQLiteOpenHelper {
                     if (!v.containsKey("saved_at")) v.put("saved_at", System.currentTimeMillis());
                     if (!v.containsKey("updated_at")) v.put("updated_at", System.currentTimeMillis());
                     if (!v.containsKey("status")) v.put("status", ST_QUEUED);
+                    v.put("uid", newUid());
+                    v.put("origin", new Prefs(app).deviceId());
+                    v.put("dirty", 1);
                     db.insert("links", null, v);
                     added++;
                 }
@@ -633,7 +732,7 @@ final class Db extends SQLiteOpenHelper {
         } finally {
             db.endTransaction();
         }
-        ChangeBus.post();
+        localChange();
         return added;
     }
 
@@ -652,15 +751,236 @@ final class Db extends SQLiteOpenHelper {
         v.put("name", clean);
         v.put("color", (int) (count % COLLECTION_COLORS));
         v.put("created_at", System.currentTimeMillis());
+        v.put("updated_at", System.currentTimeMillis());
+        v.put("uid", newUid());
+        v.put("dirty", 1);
         return db.insert("collections", null, v);
     }
 
     void deleteAll() {
         SQLiteDatabase db = getWritableDatabase();
+        long now = System.currentTimeMillis();
+        db.execSQL("INSERT OR REPLACE INTO tombstones (uid, kind, deleted_at) "
+                + "SELECT uid, 'link', ? FROM links WHERE uid IS NOT NULL", new Object[]{now});
+        db.execSQL("INSERT OR REPLACE INTO tombstones (uid, kind, deleted_at) "
+                + "SELECT uid, 'collection', ? FROM collections WHERE uid IS NOT NULL", new Object[]{now});
         db.delete("links", null, null);
         db.delete("collections", null, null);
         db.delete("analysis_runs", null, null);
-        ChangeBus.post();
+        localChange();
+    }
+
+    // ------------------------------------------------------------------ sync
+
+    /** One item ready to upload, with what is needed to mark it clean afterwards. */
+    static final class Outgoing {
+        final JSONObject item;
+        final String table;
+        final String uid;
+        final long updatedAt;
+
+        Outgoing(JSONObject item, String table, String uid, long updatedAt) {
+            this.item = item;
+            this.table = table;
+            this.uid = uid;
+            this.updatedAt = updatedAt;
+        }
+    }
+
+    /** Local changes to upload: collections first, then links, then deletions. */
+    java.util.List<Outgoing> outgoing() throws JSONException {
+        java.util.List<Outgoing> out = new java.util.ArrayList<>();
+        SQLiteDatabase db = getReadableDatabase();
+        java.util.HashMap<Long, String> colUid = new java.util.HashMap<>();
+        Cursor cc = db.rawQuery("SELECT id, uid, name, description, color, created_at, updated_at, dirty FROM collections", null);
+        try {
+            while (cc.moveToNext()) {
+                colUid.put(cc.getLong(0), cc.getString(1));
+                if (cc.getInt(7) == 0) continue;
+                JSONObject data = new JSONObject();
+                data.put("name", cc.getString(2));
+                data.put("description", cc.isNull(3) ? JSONObject.NULL : cc.getString(3));
+                data.put("color", cc.getInt(4));
+                data.put("created_at", cc.getLong(5));
+                long upd = cc.isNull(6) ? cc.getLong(5) : cc.getLong(6);
+                out.add(new Outgoing(item(cc.getString(1), "collection", data, false, upd), "collections", cc.getString(1), upd));
+            }
+        } finally {
+            cc.close();
+        }
+        Cursor c = db.query("links", LINK_COLUMNS, "dirty = 1", null, null, null, null);
+        try {
+            while (c.moveToNext()) {
+                JSONObject row = linkRow(c);
+                JSONObject data = new JSONObject();
+                for (String f : SYNC_LINK_FIELDS) {
+                    Object val = row.opt(f);
+                    data.put(f, val == null ? JSONObject.NULL : val);
+                }
+                if ("processing".equals(row.optString("status"))) data.put("status", ST_QUEUED);
+                data.put("collection", row.isNull("collection_id") ? JSONObject.NULL
+                        : orNull(colUid.get(row.optLong("collection_id"))));
+                data.put("suggested_collection", row.isNull("suggested_collection_id") ? JSONObject.NULL
+                        : orNull(colUid.get(row.optLong("suggested_collection_id"))));
+                String uid = row.optString("uid");
+                long upd = row.optLong("updated_at");
+                out.add(new Outgoing(item(uid, "link", data, false, upd), "links", uid, upd));
+            }
+        } finally {
+            c.close();
+        }
+        Cursor t = db.rawQuery("SELECT uid, kind, deleted_at FROM tombstones", null);
+        try {
+            while (t.moveToNext()) {
+                out.add(new Outgoing(item(t.getString(0), t.getString(1), new JSONObject(), true, t.getLong(2)),
+                        "tombstones", t.getString(0), t.getLong(2)));
+            }
+        } finally {
+            t.close();
+        }
+        return out;
+    }
+
+    private static Object orNull(Object o) {
+        return o == null ? JSONObject.NULL : o;
+    }
+
+    private static JSONObject item(String uid, String kind, JSONObject data, boolean deleted, long updatedAt)
+            throws JSONException {
+        return new JSONObject().put("id", uid).put("kind", kind).put("data", data)
+                .put("deleted", deleted).put("updated_at", updatedAt);
+    }
+
+    /** Marks an uploaded item clean, unless it changed again while uploading. */
+    void markUploaded(Outgoing o) {
+        SQLiteDatabase db = getWritableDatabase();
+        if (o.table.equals("tombstones")) {
+            db.delete("tombstones", "uid = ?", new String[]{o.uid});
+        } else {
+            ContentValues v = new ContentValues();
+            v.put("dirty", 0);
+            String col = o.table.equals("links") ? "updated_at" : "COALESCE(updated_at, created_at)";
+            db.update(o.table, v, "uid = ? AND " + col + " = ?", new String[]{o.uid, String.valueOf(o.updatedAt)});
+        }
+    }
+
+    /** After signing in: upload everything this device has. */
+    void markAllDirty() {
+        SQLiteDatabase db = getWritableDatabase();
+        db.execSQL("UPDATE links SET dirty = 1");
+        db.execSQL("UPDATE collections SET dirty = 1");
+    }
+
+    /**
+     * Applies one item downloaded from the server when it is newer than the local copy.
+     * Returns the local link id when a link changed (for reminders), 0 for other changes, -1 for none.
+     */
+    long applyRemote(JSONObject it) throws JSONException {
+        SQLiteDatabase db = getWritableDatabase();
+        String uid = it.getString("id");
+        String kind = it.optString("kind");
+        boolean deleted = it.optBoolean("deleted");
+        long updatedAt = it.optLong("updated_at");
+        JSONObject data = it.optJSONObject("data");
+        if (data == null) data = new JSONObject();
+        String table = "collection".equals(kind) ? "collections" : "links";
+
+        long localId = -1;
+        long localUpdated = -1;
+        Cursor c = db.rawQuery("SELECT id, " + ("links".equals(table) ? "updated_at" : "COALESCE(updated_at, created_at)")
+                + " FROM " + table + " WHERE uid = ?", new String[]{uid});
+        try {
+            if (c.moveToFirst()) {
+                localId = c.getLong(0);
+                localUpdated = c.getLong(1);
+            }
+        } finally {
+            c.close();
+        }
+
+        if (deleted) {
+            if (localId < 0) return -1;
+            if ("collections".equals(table)) {
+                ContentValues v = new ContentValues();
+                v.putNull("collection_id");
+                db.update("links", v, "collection_id = ?", new String[]{String.valueOf(localId)});
+                ContentValues sv = new ContentValues();
+                sv.putNull("suggested_collection_id");
+                db.update("links", sv, "suggested_collection_id = ?", new String[]{String.valueOf(localId)});
+            } else {
+                db.delete("analysis_runs", "link_id = ?", new String[]{String.valueOf(localId)});
+            }
+            db.delete(table, "id = ?", new String[]{String.valueOf(localId)});
+            return "links".equals(table) ? localId : 0;
+        }
+        if (localId >= 0 && localUpdated >= updatedAt) return -1;
+
+        ContentValues v = new ContentValues();
+        v.put("uid", uid);
+        v.put("dirty", 0);
+        if ("collections".equals(table)) {
+            v.put("name", data.optString("name", "Untitled"));
+            v.put("description", data.isNull("description") ? null : data.optString("description"));
+            v.put("color", data.optInt("color"));
+            v.put("created_at", data.optLong("created_at", updatedAt));
+            v.put("updated_at", updatedAt);
+            if (localId >= 0) {
+                db.update(table, v, "id = ?", new String[]{String.valueOf(localId)});
+            } else {
+                db.insert(table, null, v);
+            }
+            return 0;
+        }
+
+        for (String f : SYNC_LINK_FIELDS) {
+            if (!data.has(f) || data.isNull(f)) {
+                if (f.equals("tags") || f.equals("steps")) v.put(f, "[]");
+                else if (isNotNullInt(f)) v.put(f, 0);
+                else v.putNull(f);
+                continue;
+            }
+            Object val = data.get(f);
+            if (val instanceof JSONArray || val instanceof JSONObject) v.put(f, val.toString());
+            else if (val instanceof Boolean) v.put(f, ((Boolean) val) ? 1 : 0);
+            else if (val instanceof Double || val instanceof Float) v.put(f, ((Number) val).doubleValue());
+            else if (val instanceof Number) v.put(f, ((Number) val).longValue());
+            else v.put(f, String.valueOf(val));
+        }
+        if (v.getAsString("url") == null) return -1;
+        if (v.getAsString("status") == null) v.put("status", ST_QUEUED);
+        if (v.getAsLong("saved_at") == null) v.put("saved_at", updatedAt);
+        v.put("normalized_url", UrlUtil.normalize(v.getAsString("url")));
+        v.put("updated_at", updatedAt);
+        Long col = localCollectionId(db, data.optString("collection", null));
+        if (col != null) v.put("collection_id", col); else v.putNull("collection_id");
+        Long sug = localCollectionId(db, data.optString("suggested_collection", null));
+        if (sug != null) v.put("suggested_collection_id", sug); else v.putNull("suggested_collection_id");
+        if (localId >= 0) {
+            db.update("links", v, "id = ?", new String[]{String.valueOf(localId)});
+            return localId;
+        }
+        return db.insert("links", null, v);
+    }
+
+    private static boolean isNotNullInt(String f) {
+        switch (f) {
+            case "reviewed": case "favorite": case "archived": case "title_locked": case "tags_locked":
+            case "action_locked": case "deadline_has_time": case "deadline_locked": case "remind_days":
+            case "effort_locked": case "steps_locked":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static Long localCollectionId(SQLiteDatabase db, String uid) {
+        if (uid == null || uid.isEmpty() || "null".equals(uid)) return null;
+        Cursor c = db.rawQuery("SELECT id FROM collections WHERE uid = ?", new String[]{uid});
+        try {
+            return c.moveToFirst() ? c.getLong(0) : null;
+        } finally {
+            c.close();
+        }
     }
 
     static String emptyToNull(String s) {

@@ -36,6 +36,27 @@ Save links from any app, then let Claude brief, tag and file them.
   default, Sonnet 5.5 or Haiku 5.5), brief language (match source, English or Arabic), optional auto-filing
   of strong matches, usage and estimated cost, JSON backup export and import, delete all data.
 
+### SaveMind for Mac and sync (`desktop/`, `supabase/`)
+
+- **Mac app** (`desktop/`): an Electron app that runs the same interface as Android (shared from
+  `savemind/src/main/assets/web`) in a three-column layout: sidebar, list, and the selected link beside it.
+  Its Node backend (`desktop/backend/`) mirrors the Android logic: storage, page extraction, Claude analysis,
+  deadline reminders (macOS notifications) and sync. Add links with **Add link** (⌘N), by dropping a link on
+  the window, or from the clipboard offer. Search with ⌘K.
+- **Sync**: sign in with the same email on Android and Mac (**Settings > Account & sync**). Links,
+  collections, deadlines, plans and notes sync through Supabase; the latest edit wins, each device keeps
+  working offline, and the Claude API key never leaves the device. A link is analyzed only by the device
+  that saved it, so nothing is paid for twice.
+- **One-time server setup**: in the Supabase dashboard open **SQL Editor**, paste `supabase/schema.sql` and
+  run it. It creates the `items` table, Row Level Security so each account sees only its own rows, and the
+  `push_items` function.
+- **Building the Mac app**: `cd desktop && npm install && ./scripts/build-mac.sh` produces
+  `dist/SaveMind-<version>-mac-arm64.zip` (Apple Silicon) and `-mac-x64.zip` (Intel). Tests:
+  `npm test` (sync through a stand-in server, validation, extraction).
+- **Installing on the Mac** (the app is not signed by an Apple developer account): unzip, move
+  **SaveMind.app** to Applications, then run once in Terminal:
+  `xattr -cr /Applications/SaveMind.app && codesign --force --deep --sign - /Applications/SaveMind.app`.
+
 ### Connecting Claude
 
 SaveMind calls the Claude API directly from the phone with your own key. Create a key at

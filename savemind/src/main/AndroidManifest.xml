@@ -47,6 +47,11 @@
             android:permission="android.permission.BIND_JOB_SERVICE" />
 
         <service
+            android:name=".SyncJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <service
             android:name=".ReminderJobService"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />

@@ -64,6 +64,105 @@ final class Prefs {
         return sp.contains("apiKeyEnc");
     }
 
+    /** A random id for this installation; links saved here are analyzed here. */
+    synchronized String deviceId() {
+        String id = sp.getString("deviceId", null);
+        if (id == null) {
+            id = java.util.UUID.randomUUID().toString();
+            sp.edit().putString("deviceId", id).commit();
+        }
+        return id;
+    }
+
+    // ------------------------------------------------------------ account
+
+    boolean signedIn() {
+        return sp.contains("refreshEnc") && sp.contains("userId");
+    }
+
+    String accountEmail() {
+        return sp.getString("email", "");
+    }
+
+    String userId() {
+        return sp.getString("userId", null);
+    }
+
+    String accessToken() {
+        return sp.getString("accessToken", null);
+    }
+
+    long accessExpiresAt() {
+        return sp.getLong("accessExpires", 0);
+    }
+
+    String refreshToken() {
+        return decrypt(sp.getString("refreshEnc", null), sp.getString("refreshIv", null));
+    }
+
+    void saveSession(String email, String userId, String access, long expiresAt, String refresh) {
+        String[] enc = encrypt(refresh);
+        SharedPreferences.Editor e = sp.edit()
+                .putString("accessToken", access)
+                .putLong("accessExpires", expiresAt);
+        if (email != null) e.putString("email", email);
+        if (userId != null) e.putString("userId", userId);
+        if (enc != null) e.putString("refreshEnc", enc[0]).putString("refreshIv", enc[1]);
+        e.commit();
+    }
+
+    void clearSession() {
+        sp.edit().remove("accessToken").remove("accessExpires").remove("refreshEnc").remove("refreshIv")
+                .remove("userId").remove("lastSeq").remove("lastSync").remove("syncError").commit();
+    }
+
+    long lastSeq() {
+        return sp.getLong("lastSeq", 0);
+    }
+
+    void setLastSeq(long seq) {
+        sp.edit().putLong("lastSeq", seq).apply();
+    }
+
+    long lastSync() {
+        return sp.getLong("lastSync", 0);
+    }
+
+    void setSyncResult(long when, String error) {
+        SharedPreferences.Editor e = sp.edit();
+        if (when > 0) e.putLong("lastSync", when);
+        if (error == null) e.remove("syncError"); else e.putString("syncError", error);
+        e.apply();
+    }
+
+    String syncError() {
+        return sp.getString("syncError", null);
+    }
+
+    private static String[] encrypt(String plain) {
+        if (plain == null) return null;
+        try {
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.ENCRYPT_MODE, secretKey());
+            byte[] enc = cipher.doFinal(plain.getBytes(StandardCharsets.UTF_8));
+            return new String[]{Base64.encodeToString(enc, Base64.NO_WRAP),
+                    Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP)};
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String decrypt(String enc, String iv) {
+        if (enc == null || iv == null) return null;
+        try {
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE, secretKey(), new GCMParameterSpec(128, Base64.decode(iv, Base64.NO_WRAP)));
+            return new String(cipher.doFinal(Base64.decode(enc, Base64.NO_WRAP)), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     String apiKey() {
         String enc = sp.getString("apiKeyEnc", null);
         String iv = sp.getString("apiKeyIv", null);
