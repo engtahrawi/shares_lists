@@ -51,6 +51,7 @@
   var planOpen = {};
   var refsOpen = {};
   var collMode = 'collections';
+  var welcomeStep = 1;
   var countryFilter = 'open';
   var desk = false;
   var paneId = null;
@@ -209,6 +210,68 @@
       + '<div class="col grow" style="gap:4px"><span class="dlabel">Deadline · ' + esc(info.label) + '</span>'
       + '<span class="dfull">' + esc(deadlineFull(l)) + '</span><span class="src">' + esc(src) + '</span></div>'
       + '<button class="btn sec" style="min-height:36px;padding:0 12px;align-self:flex-start" data-act="deadline" data-id="' + l.id + '" aria-label="Edit deadline">Edit</button></section>';
+  }
+
+  // ---------------------------------------------------------------- welcome
+
+  function needsWelcome() { return !S.settings.onboarded; }
+
+  function welcomeDots() {
+    return '<div class="row" style="gap:6px;justify-content:center" aria-label="Step ' + welcomeStep + ' of 3">'
+      + [1, 2, 3].map(function (n) { return '<span class="wdot' + (n === welcomeStep ? ' on' : '') + '"></span>'; }).join('') + '</div>';
+  }
+
+  function viewWelcome() {
+    var st = S.settings, acc = S.account || {};
+    var h = '<div class="body welcome">' + welcomeDots();
+    if (welcomeStep === 1) {
+      h += '<div class="col" style="align-items:center;gap:10px;text-align:center;padding-top:8px"><span class="slogo" style="width:64px;height:64px;border-radius:18px">' + I.bookmark + '</span>'
+        + '<h1 class="h1">Welcome to SaveMind</h1><p class="s">Save links from any app. Claude writes a short brief, finds deadlines, files each link and plans which opportunity to work on first.</p></div>'
+        + '<div class="card" style="gap:10px">'
+        + '<div class="row" style="gap:10px;align-items:flex-start"><span class="wnum">1</span><span class="s">Share a link from WhatsApp, LinkedIn, YouTube or your browser and choose SaveMind' + (desk ? ', or press + Add link.' : '.') + '</span></div>'
+        + '<div class="row" style="gap:10px;align-items:flex-start"><span class="wnum">2</span><span class="s">Claude reads it and suggests a collection, a deadline, a country and the next step.</span></div>'
+        + '<div class="row" style="gap:10px;align-items:flex-start"><span class="wnum">3</span><span class="s">The Planner shows what to start today so deadlines never pile up.</span></div></div>'
+        + '<label class="lbl" for="wName">What should SaveMind call you?</label>'
+        + '<input id="wName" class="inp" dir="auto" maxlength="40" autocomplete="given-name" placeholder="Your first name" value="' + esc(st.name || '') + '">'
+        + '<div style="flex:1"></div><button class="btn pri big" data-act="wNext1">Continue</button>';
+    } else if (welcomeStep === 2) {
+      h += '<div class="col" style="gap:6px"><h1 class="h1" style="font-size:26px">Connect Claude</h1>'
+        + '<p class="s">SaveMind uses Claude, by Anthropic, to read links. It needs your own API key; usage is billed to your Anthropic account, usually a few cents per link (less with Claude Haiku, chosen in Settings).</p></div>'
+        + '<div class="card" style="gap:8px"><p class="t" style="font-size:14px">How to get a key</p>'
+        + '<p class="s">1. Open console.anthropic.com and sign up.<br>2. Add a small amount of credit under Billing.<br>3. Create a key under API Keys and paste it here.</p>'
+        + '<button class="link" style="text-align:start" data-act="getKey">Open console.anthropic.com ↗</button></div>';
+      if (st.hasKey) {
+        h += '<p class="ok">Key saved: ' + esc(st.keyHint) + '</p>';
+      } else {
+        h += '<label class="lbl" for="setKey">API key</label><input id="setKey" class="inp" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-…">'
+          + '<span id="keyResult" class="src">The key is encrypted on this ' + deviceWord() + ' and never synced.</span>';
+      }
+      h += '<div style="flex:1"></div>'
+        + (st.hasKey ? '<button class="btn pri big" data-act="wNext2">Continue</button>'
+          : '<button class="btn pri big" data-act="wSaveKey">Save key and continue</button><button class="btn ghost" data-act="wNext2">Skip for now. Links are still saved.</button>');
+    } else {
+      h += '<div class="col" style="gap:6px"><h1 class="h1" style="font-size:26px">Sync (optional)</h1>'
+        + '<p class="s">Use SaveMind on your phone and Mac with the same links. Without an account, everything stays on this ' + deviceWord() + ' only.</p></div>';
+      if (acc.signedIn) {
+        h += '<div class="card"><p class="ok">Signed in as ' + esc(acc.email) + '</p><p class="s">Your links sync automatically.</p></div>';
+      } else if (acc.available) {
+        h += '<div class="card" style="gap:10px"><label class="lbl" for="accEmail">Email</label><input id="accEmail" class="inp" type="email" autocomplete="username" autocapitalize="off" spellcheck="false">'
+          + '<label class="lbl" for="accPass">Password</label><input id="accPass" class="inp" type="password" autocomplete="new-password" placeholder="At least 6 characters">'
+          + '<div class="row"><button class="btn sec flex1" data-act="signIn">Sign in</button><button class="btn pri flex1" data-act="signUp">Create account</button></div>'
+          + '<span id="authResult" class="src"></span></div>'
+          + '<p class="src">Synced links are stored on the SaveMind sync server (Supabase), run by the person who shared this app with you. Access rules let each account read only its own links. Your Claude key is never uploaded.</p>';
+      }
+      h += '<div style="flex:1"></div><button class="btn pri big" data-act="wDone">' + (acc.signedIn ? 'Start using SaveMind' : 'Use on this ' + deviceWord() + ' only') + '</button>';
+    }
+    return h + '</div>';
+  }
+
+  function finishWelcome() {
+    saveSettings({ onboarded: true });
+    S.settings.onboarded = true;
+    welcomeStep = 1;
+    nav = ['#/home'];
+    render(true);
   }
 
   // -------------------------------------------------------------- countries
@@ -654,6 +717,10 @@
     if (closeSheet()) return true;
     if (desk && paneId !== null) { paneId = null; render(false); return true; }
     if (nav.length > 1) { nav.pop(); render(true); return true; }
+    if (current() === '#/welcome') {
+      if (welcomeStep > 1) { welcomeStep--; render(true); return true; }
+      return false;
+    }
     if (current() !== '#/home') { nav = ['#/home']; render(true); return true; }
     return false;
   }
@@ -684,16 +751,18 @@
       case 'search': html = viewSearch(); tab = 'search'; break;
       case 'planner': html = viewPlanner(); tab = 'planner'; break;
       case 'settings': html = viewSettings(); break;
+      case 'welcome': html = viewWelcome(); break;
       default: html = viewHome(); tab = 'home';
     }
     view.innerHTML = html;
+    document.body.classList.toggle('onboarding', name === 'welcome');
     renderTabs(tab);
     if (name === 'add') bindAdd();
     if (name === 'search') bindSearch();
     if (name === 'settings') bindSettings();
     view.scrollTop = navigated ? (scrollMemo[route] && nav.indexOf(route) < nav.length - 1 ? scrollMemo[route] : 0) : scrollMemo[route] || 0;
     if (navigated) scrollMemo[route] = 0;
-    if (desk) { renderSide(); renderPane(); }
+    if (desk && name !== 'welcome') { renderSide(); renderPane(); }
     dirty = false;
   }
 
@@ -1310,7 +1379,7 @@
 
   function saveSettings(patch) {
     var st = S.settings;
-    var next = { name: st.name, model: st.model, lang: st.lang, autoFile: st.autoFile };
+    var next = { name: st.name, model: st.model, lang: st.lang, autoFile: st.autoFile, onboarded: !!st.onboarded };
     Object.keys(patch).forEach(function (k) { next[k] = patch[k]; });
     SM.saveSettings(JSON.stringify(next));
     Object.keys(patch).forEach(function (k) { S.settings[k] = patch[k]; });
@@ -1637,6 +1706,23 @@
         });
         break;
       case 'toggleMissed': showMissed = !showMissed; render(false); break;
+      case 'wNext1': {
+        var nm = document.getElementById('wName').value.trim();
+        if (!nm) { toast('Enter your name'); document.getElementById('wName').focus(); break; }
+        saveSettings({ name: nm });
+        welcomeStep = 2;
+        render(true);
+        break;
+      }
+      case 'wSaveKey': {
+        var k = document.getElementById('setKey').value.trim();
+        if (!/^sk-ant-/.test(k)) { toast('Claude API keys start with sk-ant-'); break; }
+        if (SM.setApiKey(k)) { load(); welcomeStep = 3; render(true); toast('Key saved'); }
+        else toast('Could not save the key');
+        break;
+      }
+      case 'wNext2': welcomeStep = 3; render(true); break;
+      case 'wDone': finishWelcome(); break;
       case 'collMode': go(el.getAttribute('data-v') === 'countries' ? '#/countries' : '#/collections', true); break;
       case 'countryFilter': countryFilter = el.getAttribute('data-v'); render(false); break;
       case 'countries': closeSheet(); countrySheet(id); break;
@@ -1776,11 +1862,11 @@
     changed: function () {
       load();
       var route = current();
-      if (desk && !document.getElementById('overlay').innerHTML && route !== '#/add' && !typing()) { render(false); return; }
+      if (desk && !document.getElementById('overlay').innerHTML && route !== '#/add' && route !== '#/welcome' && !typing()) { render(false); return; }
       if (desk) { renderSide(); }
       if (document.getElementById('overlay').innerHTML || route === '#/add') { dirty = true; renderTabs(document.getElementById('tabs').hidden ? null : tabOf(route)); return; }
       if (route === '#/search') { renderTabs('search'); renderResults(); return; }
-      if (route === '#/settings') { if (!typing()) render(false); else dirty = true; return; }
+      if (route === '#/settings' || route === '#/welcome') { if (!typing()) render(false); else dirty = true; return; }
       render(false);
     },
     go: function (route) { nav = ['#/home']; if (route !== '#/home') nav.push(route); closeSheet(); render(true); },
@@ -1820,6 +1906,7 @@
   load();
   var initial = location.hash;
   if (initial && initial.indexOf('#/') === 0 && initial !== '#/home') nav.push(initial);
+  if (needsWelcome()) nav = ['#/welcome'];
   render(true);
   setTimeout(offerClipboard, 600);
 })();

@@ -22,7 +22,7 @@ function createBridge(ctx) {
         collections: store.allCollections(),
         settings: {
           name: store.name(), model: store.model(), lang: store.briefLanguage(), autoFile: store.autoFile(),
-          hasKey: store.hasApiKey(), keyHint: store.apiKeyHint()
+          hasKey: store.hasApiKey(), keyHint: store.apiKeyHint(), onboarded: store.onboarded()
         },
         account: {
           available: sync.available(), signedIn: store.signedIn(), email: s && s.email ? s.email : '',
@@ -234,6 +234,7 @@ function createBridge(ctx) {
       let lang = o.lang || store.briefLanguage();
       if (!['auto', 'en', 'ar'].includes(lang)) lang = 'auto';
       store.saveSettings(name, o.model || store.model(), lang, o.autoFile != null ? !!o.autoFile : store.autoFile());
+      if (o.onboarded) { store.prefs.onboarded = true; store.save(); }
       store.changed();
     },
 

@@ -32,7 +32,7 @@ final class Prefs {
     }
 
     String name() {
-        return sp.getString("name", "Abdallah");
+        return sp.getString("name", "");
     }
 
     String model() {
@@ -58,6 +58,15 @@ final class Prefs {
                 .putString("lang", lang)
                 .putBoolean("autoFile", autoFile)
                 .apply();
+    }
+
+    /** True once the first-launch welcome has been completed or skipped. */
+    boolean onboarded() {
+        return sp.getBoolean("onboarded", false);
+    }
+
+    void setOnboarded() {
+        sp.edit().putBoolean("onboarded", true).apply();
     }
 
     boolean hasApiKey() {

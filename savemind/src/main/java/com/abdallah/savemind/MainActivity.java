@@ -313,6 +313,7 @@ public class MainActivity extends Activity {
                 settings.put("autoFile", p.autoFile());
                 settings.put("hasKey", p.hasApiKey());
                 settings.put("keyHint", p.apiKeyHint());
+                settings.put("onboarded", p.onboarded());
                 o.put("settings", settings);
                 JSONObject account = new JSONObject();
                 account.put("available", SyncConfig.configured());
@@ -717,6 +718,7 @@ public class MainActivity extends Activity {
                 String lang = o.optString("lang", p.briefLanguage());
                 if (!lang.equals("auto") && !lang.equals("en") && !lang.equals("ar")) lang = "auto";
                 p.save(name, model, lang, o.optBoolean("autoFile", p.autoFile()));
+                if (o.optBoolean("onboarded", false)) p.setOnboarded();
                 ChangeBus.post();
             } catch (JSONException ignored) {
                 // malformed input from the page is ignored

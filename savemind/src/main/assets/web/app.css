@@ -272,3 +272,11 @@ body.desk #side button, body.desk #side input { -webkit-app-region: no-drag; }
 .crow { display: flex; align-items: center; gap: 12px; min-height: 48px; border: 0; border-bottom: 1px solid var(--line); background: none; text-align: start; width: 100%; font-size: 15px; padding: 0; }
 .crow .ctile { width: 32px; height: 24px; border-radius: 6px; font-size: 11px; }
 #cList { max-height: 46vh; overflow-y: auto; }
+
+/* First-launch welcome */
+.body.welcome { min-height: 100%; max-width: 520px; margin: 0 auto; padding-top: 28px; }
+.wdot { width: 8px; height: 8px; border-radius: 4px; background: var(--line-2); }
+.wdot.on { width: 24px; background: var(--blue); }
+.wnum { width: 24px; height: 24px; border-radius: 50%; background: var(--blue-soft); color: var(--blue); font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex: none; }
+body.onboarding #side, body.onboarding #pane, body.onboarding #tabs { display: none !important; }
+body.desk.onboarding #view { width: 100%; border-right: 0; }

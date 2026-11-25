@@ -113,7 +113,8 @@ class Store {
 
   get prefs() { return this.data.prefs; }
   deviceId() { return this.data.prefs.deviceId; }
-  name() { return this.prefs.name != null ? this.prefs.name : 'Abdallah'; }
+  name() { return this.prefs.name != null ? this.prefs.name : ''; }
+  onboarded() { return !!this.prefs.onboarded; }
   model() {
     const m = this.prefs.model;
     return ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'].includes(m) ? m : 'claude-opus-5-5';
