@@ -29,7 +29,7 @@ function createBridge(ctx) {
           lastSync: store.prefs.lastSync || 0, syncing: sync.running, error: store.prefs.syncError || null
         },
         version: ctx.version,
-        platform: 'mac'
+        platform: ctx.platformName || 'mac'
       });
     },
 

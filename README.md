@@ -92,6 +92,20 @@ iOS, reminders and semantic search are not included.
 - **Without Gradle or the SDK manager**: `savemind/build-offline.sh` builds a signed APK with the Debian
   `aapt`, `dalvik-exchange`, `zipalign` and `apksigner` packages and an API 34 `android.jar`.
 
+### Web dashboard
+
+`docs/` holds the web version, served by GitHub Pages at https://engtahrawi.github.io/shares_lists/
+(Settings, Pages, Deploy from a branch, this branch, folder `/docs`). Anyone with a SaveMind account signs in
+with the same email and password as in the apps and sees only their own links.
+
+- It shows a dashboard (open opportunities, deadlines on a 5-week calendar, workload by week against 5 working
+  days, opportunities by country, what to start next) plus the Inbox, Planner, Collections, Countries and
+  each opportunity, all editable. Edits sync to the phone and Mac within seconds.
+- Saving and analyzing new links stays in the Android and Mac apps; the web never needs a Claude API key.
+- It is the shared interface plus the Mac backend (`desktop/backend`) bundled for the browser, storing its
+  copy in `localStorage` and syncing straight with Supabase. Signing out removes the browser's copy.
+- Rebuild after changing the interface or backend: `node webapp/build.js`, then commit `docs/`.
+
 ## Welcome Abdallah
 
 A personal Android app for collecting links:

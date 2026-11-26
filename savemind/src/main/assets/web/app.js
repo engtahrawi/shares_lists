@@ -29,6 +29,7 @@
     heart: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>',
     heartOn: '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>',
     check: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>',
+    grid: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>',
     globe: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>',
     pin: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
     doc: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg>',
@@ -54,6 +55,8 @@
   var welcomeStep = 1;
   var countryFilter = 'open';
   var desk = false;
+  var web = false;
+  var dashTable = {};
   var paneId = null;
   var showMissed = false;
   var callbacks = {};
@@ -61,10 +64,15 @@
 
   function load() {
     try { S = JSON.parse(SM.getState()); } catch (e) { /* keep last state */ }
-    desk = S.platform === 'mac';
+    web = S.platform === 'web';
+    desk = S.platform === 'mac' || (web && window.innerWidth >= 960);
+    document.body.classList.toggle('web', web);
     document.body.classList.toggle('desk', desk);
   }
-  function deviceWord() { return desk ? 'Mac' : 'phone'; }
+  /** Adding and analyzing links happens in the phone and Mac apps; the web dashboard reads and edits. */
+  function canAnalyze() { return !web; }
+  function deviceWord() {
+    if (web) return 'browser'; return desk ? 'Mac' : 'phone'; }
 
   function linkById(id) {
     for (var i = 0; i < S.links.length; i++) if (S.links[i].id === id) return S.links[i];
@@ -212,9 +220,200 @@
       + '<button class="btn sec" style="min-height:36px;padding:0 12px;align-self:flex-start" data-act="deadline" data-id="' + l.id + '" aria-label="Edit deadline">Edit</button></section>';
   }
 
+  // -------------------------------------------------------------- dashboard
+
+  var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  function mondayOf(ms) {
+    var d = new Date(startOfDay(ms));
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    return d.getTime();
+  }
+  function addDays(ms, n) { var d = new Date(ms); d.setDate(d.getDate() + n); return d.getTime(); }
+  function dueIn(l) { return Math.round((startOfDay(l.deadline_at) - startOfDay(Date.now())) / DAY); }
+  function fmtDays(n) { n = Math.round(n * 10) / 10; return n + ' day' + (n === 1 ? '' : 's'); }
+  function relDay(l) { var d = dueIn(l); return d <= 0 ? 'today' : d === 1 ? 'tomorrow' : 'in ' + d + ' days'; }
+
+  /** Work still to do for each of the next n weeks, counted in the week of each deadline. */
+  function workload(n) {
+    var start = mondayOf(Date.now());
+    var weeks = [];
+    for (var i = 0; i < n; i++) weeks.push({ start: addDays(start, 7 * i), need: 0, items: [] });
+    plannerOrder().forEach(function (x) {
+      var k = Math.floor((startOfDay(x.l.deadline_at) - start) / (7 * DAY));
+      if (k < 0 || k >= n) return;
+      weeks[k].need += x.p.remaining;
+      weeks[k].items.push(x);
+    });
+    weeks.forEach(function (w) { w.need = Math.round(w.need * 10) / 10; });
+    return weeks;
+  }
+
+  function tableToggle(key) {
+    return '<button class="link" data-act="dashTable" data-v="' + key + '">' + (dashTable[key] ? 'Chart view' : 'Table view') + '</button>';
+  }
+
+  function kpi(label, value, sub, color) {
+    return '<div class="kpi"><span class="kl">' + esc(label) + '</span><span class="kv"' + (color ? ' style="color:' + color + '"' : '') + '>' + esc(value) + '</span>'
+      + '<span class="src clamp2" dir="auto">' + esc(sub) + '</span></div>';
+  }
+
+  function viewDashboard() {
+    var now = new Date();
+    var opps = S.links.filter(function (l) { return !l.archived && (needsCountry(l) || hasDeadline(l)); });
+    var open = opps.filter(isOpen);
+    var countries = {};
+    open.forEach(function (l) { countriesOf(l).forEach(function (c) { countries[c] = (countries[c] || 0) + 1; }); });
+    var nCountries = Object.keys(countries).length;
+    var soon = open.filter(function (l) { return hasDeadline(l) && dueIn(l) < 7; }).sort(function (a, b) { return a.deadline_at - b.deadline_at; });
+    var weeks = workload(6);
+    var four = weeks.slice(0, 4);
+    var planned = four.reduce(function (t, w) { return t + w.need; }, 0);
+    var over = four.filter(function (w) { return w.need > 5; }).length;
+    var stepsTotal = 0, stepsDone = 0;
+    open.forEach(function (l) {
+      stepsTotal += stepsOf(l).length;
+      stepsDone += stepsOf(l).filter(function (x) { return x.d; }).length;
+    });
+    var name = S.settings.name || '';
+    var greet = now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening';
+
+    var h = '<div class="body dash"><div class="row between wrap" style="align-items:flex-end;gap:12px"><div class="col" style="gap:2px">'
+      + '<span class="s">' + WEEKDAYS[now.getDay()] + ', ' + now.getDate() + ' ' + MONTH_NAMES[now.getMonth()] + '</span>'
+      + '<h1 class="h1" dir="auto">' + esc(greet + (name ? ', ' + name : '')) + '</h1></div>'
+      + '<button class="btn pri" style="background:var(--ink);min-height:40px" data-tab="#/planner">Open Planner</button></div>';
+
+    if (!opps.length) {
+      return h + '<div class="card empty"><div class="big">' + I.grid + '</div><p class="t">Your dashboard fills up as you save opportunities</p>'
+        + '<p class="s">' + (web ? 'Save links with the SaveMind app on Android or Mac; they appear here within seconds.' : 'Share an opportunity to SaveMind or add a link.') + '</p></div></div>';
+    }
+
+    h += '<section class="kpis" aria-label="Summary">'
+      + kpi('Open opportunities', String(open.length), nCountries ? 'across ' + nCountries + ' countr' + (nCountries === 1 ? 'y' : 'ies') : 'no countries yet')
+      + kpi('Closing this week', String(soon.length), soon.length ? 'next: ' + titleOf(soon[0]) + ', ' + relDay(soon[0]) : 'nothing this week', soon.length ? 'var(--red)' : '')
+      + kpi('Work planned, next 4 weeks', fmtDays(planned), over ? over + ' week' + (over === 1 ? ' is' : 's are') + ' overloaded' : 'no overloaded weeks')
+      + '<div class="kpi"><span class="kl">Preparation steps done</span><span class="kv">' + stepsDone + ' <small>of ' + stepsTotal + '</small></span>'
+      + '<div class="pbar" style="flex:none;width:100%"><div style="width:' + (stepsTotal ? Math.round(100 * stepsDone / stepsTotal) : 0) + '%"></div></div></div>'
+      + '</section>';
+
+    h += '<div class="dgrid">' + calendarCard() + workloadCard(weeks) + '</div>';
+    h += '<div class="dgrid">' + countryCard(countries) + upNextCard() + '</div>';
+    return h + '</div>';
+  }
+
+  function calendarCard() {
+    var start = mondayOf(Date.now());
+    var today = startOfDay(Date.now());
+    var byDay = {};
+    S.links.forEach(function (l) {
+      if (l.archived || !hasDeadline(l)) return;
+      var k = startOfDay(l.deadline_at);
+      (byDay[k] = byDay[k] || []).push(l);
+    });
+    var h = '<section class="card dcard" aria-label="Deadlines, next 5 weeks"><div class="row between"><h2 class="h2">Deadlines, next 5 weeks</h2>' + tableToggle('cal') + '</div>';
+    var i, d;
+    if (dashTable.cal) {
+      var rows = [];
+      for (i = 0; i < 35; i++) (byDay[startOfDay(addDays(start, i))] || []).forEach(function (l) { rows.push(l); });
+      h += rows.length ? '<table class="dtable"><thead><tr><th>Date</th><th>Opportunity</th><th>Status</th></tr></thead><tbody>' + rows.map(function (l) {
+        return '<tr><td>' + esc(shortDate(l.deadline_at)) + '</td><td dir="auto">' + esc(titleOf(l)) + '</td><td>' + esc(deadlineInfo(l).label) + '</td></tr>';
+      }).join('') + '</tbody></table>' : '<p class="s">No deadlines in the next 5 weeks.</p>';
+      return h + '</section>';
+    }
+    h += '<div class="cal cal-head" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div><div class="cal">';
+    for (i = 0; i < 35; i++) {
+      d = startOfDay(addDays(start, i));
+      var dt = new Date(d);
+      var label = (dt.getDate() === 1 || i === 0) ? dt.getDate() + ' ' + MONTHS[dt.getMonth()] : String(dt.getDate());
+      var items = byDay[d] || [];
+      h += '<div class="cday' + (d === today ? ' today' : '') + (d < today ? ' past' : '') + '"><span>' + label + (d === today ? ' · today' : '') + '</span>'
+        + items.slice(0, 2).map(function (l) {
+          return '<button class="cpill ' + deadlineInfo(l).tone + '" data-act="open" data-id="' + l.id + '" data-tip="' + esc(titleOf(l) + ' · ' + deadlineFull(l)) + '" dir="auto">' + esc(titleOf(l)) + '</button>';
+        }).join('') + (items.length > 2 ? '<span class="src">+' + (items.length - 2) + ' more</span>' : '') + '</div>';
+    }
+    h += '</div><div class="row wrap legend" style="gap:14px"><span><i style="background:var(--red)"></i>3 days or less</span>'
+      + '<span><i style="background:var(--amber-soft);border:1px solid #C27A12"></i>4 to 14 days</span>'
+      + '<span><i style="background:var(--soft);border:1px solid #B0B5C0"></i>Later</span></div>';
+    return h + '</section>';
+  }
+
+  function workloadCard(weeks) {
+    var max = Math.max(10, Math.ceil(Math.max.apply(null, weeks.map(function (w) { return w.need; }))));
+    var h = '<section class="card dcard" aria-label="Workload by week"><div class="row between"><h2 class="h2">Workload by week</h2>' + tableToggle('work') + '</div>'
+      + '<span class="s">Days of work due each week, against 5 working days</span>';
+    if (dashTable.work) {
+      return h + '<table class="dtable"><thead><tr><th>Week of</th><th>Days needed</th><th>Opportunities</th></tr></thead><tbody>' + weeks.map(function (w) {
+        return '<tr><td>' + esc(shortDate(w.start)) + '</td><td>' + w.need + (w.need > 5 ? ' (over)' : '') + '</td><td dir="auto">'
+          + esc(w.items.map(function (x) { return titleOf(x.l); }).join(', ') || '-') + '</td></tr>';
+      }).join('') + '</tbody></table></section>';
+    }
+    h += '<div class="wchart"><span class="wy top">' + max + '</span><span class="wy bottom">0</span>'
+      + '<div class="wcap" style="bottom:' + (100 * 5 / max) + '%"><span>5 working days</span></div><div class="wbars">'
+      + weeks.map(function (w) {
+        var pct = w.need ? Math.max(1.5, 100 * w.need / max) : 0;
+        var tip = 'Week of ' + shortDate(w.start) + ': ' + fmtDays(w.need) + ' of work'
+          + (w.items.length ? ' (' + w.items.map(function (x) { return titleOf(x.l); }).join(', ') + ')' : '');
+        return '<div class="wcol" data-tip="' + esc(tip) + '" tabindex="0" aria-label="' + esc(tip) + '">'
+          + (w.need > 5 ? '<span class="wval">' + w.need + '</span>' : '')
+          + '<div class="wbar' + (w.need > 5 ? ' over' : '') + '" style="height:' + pct + '%"></div></div>';
+      }).join('') + '</div></div><div class="wlabels">' + weeks.map(function (w) { return '<span>' + esc(shortDate(w.start)) + '</span>'; }).join('') + '</div>';
+    var overW = weeks.filter(function (w) { return w.need > 5; });
+    if (overW.length) {
+      var first = overW[0].items.slice().sort(function (a, b) { return b.p.remaining - a.p.remaining; })[0];
+      h += '<div class="notice" style="padding:10px 12px"><p class="s"><b style="color:var(--amber)">' + overW.length + ' week' + (overW.length === 1 ? ' is' : 's are') + ' overloaded.</b> '
+        + (first ? 'Start ' + esc(titleOf(first.l)) + ' early to spread the work.' : '') + '</p></div>';
+    }
+    return h + '</section>';
+  }
+
+  function countryCard(countries) {
+    var list = Object.keys(countries).map(function (c) { return { c: c, n: countries[c] }; })
+      .sort(function (a, b) { return b.n - a.n; }).slice(0, 8);
+    var h = '<section class="card dcard" aria-label="Open opportunities by country"><div class="row between"><h2 class="h2">Open opportunities by country</h2>' + (list.length ? tableToggle('country') : '') + '</div>';
+    if (!list.length) return h + '<p class="s">Countries appear when Claude labels your opportunities.</p></section>';
+    if (dashTable.country) {
+      return h + '<table class="dtable"><thead><tr><th>Country</th><th>Open</th></tr></thead><tbody>' + list.map(function (x) {
+        return '<tr><td>' + esc(countryName(x.c)) + '</td><td>' + x.n + '</td></tr>';
+      }).join('') + '</tbody></table></section>';
+    }
+    var max = list[0].n;
+    return h + '<div class="hbars">' + list.map(function (x) {
+      return '<button class="hrow" data-go="#/country/' + esc(x.c) + '" data-tip="' + esc(countryName(x.c) + ': ' + x.n + ' open') + '"><span class="hl">' + esc(countryName(x.c)) + '</span>'
+        + '<span class="htrack"><span class="hbar" style="width:' + (100 * x.n / max) + '%"></span></span><span class="hv">' + x.n + '</span></button>';
+    }).join('') + '</div></section>';
+  }
+
+  function upNextCard() {
+    var order = plannerOrder().slice(0, 5);
+    var h = '<section class="card dcard" aria-label="Up next"><div class="row between"><h2 class="h2">Up next</h2><button class="link" data-tab="#/planner">All in Planner</button></div>';
+    if (!order.length) return h + '<p class="s">No open deadlines.</p></section>';
+    return h + '<div class="dlist" style="box-shadow:none">' + order.map(function (x, n) { return planRow(x, n + 1); }).join('') + '</div></section>';
+  }
+
+  function viewLogin() {
+    var acc = S.account || {};
+    var points = ['See every deadline on a calendar, colored by how close it is.',
+      'Spot overloaded weeks before they happen and start the right application first.',
+      'Same account as the SaveMind app on Android and Mac. Changes sync both ways.'];
+    return '<div class="login"><section class="lpitch" aria-label="About SaveMind"><div class="row" style="gap:12px"><span class="slogo" style="width:40px;height:40px;border-radius:11px">' + I.bookmark + '</span>'
+      + '<span style="font-family:var(--display);font-size:24px;font-weight:800">SaveMind</span></div>'
+      + '<h1 class="h1 lhead">Every opportunity you saved, planned on one screen.</h1><div class="col" style="gap:14px">'
+      + points.map(function (t, i) { return '<div class="row" style="gap:12px;align-items:flex-start"><span class="lnum">' + (i + 1) + '</span><span style="opacity:.9;line-height:1.5">' + t + '</span></div>'; }).join('')
+      + '</div></section><section class="lform" aria-label="Sign in"><div class="card" style="max-width:400px;width:100%;padding:28px;gap:12px;box-sizing:border-box">'
+      + '<h2 class="h1" style="font-size:26px">Sign in</h2><p class="s">Use the email and password from your SaveMind app.</p>'
+      + (acc.available ? '<label class="lbl" for="accEmail">Email</label><input id="accEmail" class="inp" type="email" autocomplete="username" autocapitalize="off" spellcheck="false">'
+        + '<label class="lbl" for="accPass">Password</label><input id="accPass" class="inp" type="password" autocomplete="current-password">'
+        + '<button class="btn pri" data-act="signIn">Sign in</button><span id="authResult" class="src" role="status"></span>'
+        + '<div class="row" style="gap:10px"><span style="flex:1;height:1px;background:var(--line)"></span><span class="src">New to SaveMind?</span><span style="flex:1;height:1px;background:var(--line)"></span></div>'
+        + '<button class="btn sec" data-act="signUp">Create an account</button>'
+        : '<p class="bad">Sync is not set up for this site.</p>')
+      + '<p class="src">Your links are stored on the SaveMind sync server and visible only to your account. Save new links with the Android or Mac app; they appear here within seconds.</p>'
+      + '</div></section></div>';
+  }
+
   // ---------------------------------------------------------------- welcome
 
-  function needsWelcome() { return !S.settings.onboarded; }
+  function needsWelcome() { return !web && !S.settings.onboarded; }
 
   function welcomeDots() {
     return '<div class="row" style="gap:6px;justify-content:center" aria-label="Step ' + welcomeStep + ' of 3">'
@@ -353,7 +552,7 @@
     if (code === 'NONE') {
       var mine = links.filter(function (l) { return ['analyzed', 'partial', 'failed'].indexOf(l.status) >= 0 && !l.countries_locked; }).length;
       h += '<div class="card" style="gap:8px"><p class="s">These were saved before countries were added. Claude can read them again and add their countries; each costs one analysis. You can also set a country by hand on each one.</p>'
-        + (mine ? '<button class="btn sec" data-act="countryReanalyze">Analyze ' + (mine === 1 ? 'it' : 'all ' + mine) + '</button>' : '') + '</div>';
+        + (mine && canAnalyze() ? '<button class="btn sec" data-act="countryReanalyze">Analyze ' + (mine === 1 ? 'it' : 'all ' + mine) + '</button>' : '') + '</div>';
     } else {
       h += '<div class="row" style="gap:6px"><button class="chip' + (countryFilter === 'open' ? ' ink' : '') + '" data-act="countryFilter" data-v="open">Open (' + open.length + ')</button>'
         + '<button class="chip' + (countryFilter === 'all' ? ' ink' : '') + '" data-act="countryFilter" data-v="all">All (' + links.length + ')</button></div>';
@@ -450,7 +649,7 @@
           + '<span class="src" style="color:' + st[1] + ';font-weight:600">' + esc(domainOf(r.url)) + ' · ' + esc(st[0]) + '</span></button>'
           + '<button class="pdel" data-act="refRemove" data-id="' + l.id + '" data-i="' + i + '" aria-label="Remove reference link">×</button></div>';
       });
-      if (refs.length < 5) h += '<button class="link" style="text-align:start;padding-top:10px" data-act="refAdd" data-id="' + l.id + '">+ Add reference link</button>';
+      if (refs.length < 5 && canAnalyze()) h += '<button class="link" style="text-align:start;padding-top:10px" data-act="refAdd" data-id="' + l.id + '">+ Add reference link</button>';
       h += '<p class="src" style="margin:8px 0 0">Claude reads these with the saved link and updates the brief, deadline, country and plan.</p></div>';
     }
     return h + '</section>';
@@ -573,7 +772,7 @@
       + '<p class="k" style="opacity:.85;line-height:1.4" dir="auto">' + esc(focus) + '</p></div>';
 
     var unknown = order.filter(function (x) { return !x.p.known; }).length;
-    if (unknown) {
+    if (unknown && canAnalyze()) {
       h += '<div class="card" style="gap:8px"><p class="t">' + unknown + ' opportunit' + (unknown === 1 ? 'y has' : 'ies have') + ' no work estimate yet</p>'
         + '<p class="s">They were saved before the Planner existed, so they are ordered as if they need 1 day. Claude can estimate the work and list the steps.</p>'
         + '<button class="btn sec" data-act="planReanalyze">Analyze ' + (unknown === 1 ? 'it' : 'them') + '</button></div>';
@@ -636,7 +835,7 @@
             + '<button class="pdel" data-act="stepRemove" data-id="' + l.id + '" data-i="' + i + '" aria-label="Remove step">×</button></div>';
         }).join('') + '</div>';
       } else {
-        h += '<p class="s">No preparation steps yet.' + (p.known ? '' : ' Analyze again from the ⋯ menu, or add your own.') + '</p>';
+        h += '<p class="s">No preparation steps yet.' + (p.known ? '' : canAnalyze() ? ' Analyze again from the ⋯ menu, or add your own.' : ' Add your own.') + '</p>';
       }
       h += '<button class="link" style="text-align:start" data-act="stepAdd" data-id="' + l.id + '">+ Add step</button></div>';
     }
@@ -752,17 +951,22 @@
       case 'planner': html = viewPlanner(); tab = 'planner'; break;
       case 'settings': html = viewSettings(); break;
       case 'welcome': html = viewWelcome(); break;
-      default: html = viewHome(); tab = 'home';
+      case 'dashboard': html = viewDashboard(); tab = 'home'; break;
+      default: html = web ? viewDashboard() : viewHome(); tab = 'home';
     }
+    if (web && !(S.account || {}).signedIn) { html = viewLogin(); name = 'login'; tab = null; }
     view.innerHTML = html;
-    document.body.classList.toggle('onboarding', name === 'welcome');
+    document.body.classList.toggle('onboarding', name === 'welcome' || name === 'login');
+    var wide = desk && (name === 'dashboard' || (web && name === 'home'));
+    document.body.classList.toggle('wide', wide);
+    document.body.classList.toggle('nosel', wide && paneId === null);
     renderTabs(tab);
     if (name === 'add') bindAdd();
     if (name === 'search') bindSearch();
     if (name === 'settings') bindSettings();
     view.scrollTop = navigated ? (scrollMemo[route] && nav.indexOf(route) < nav.length - 1 ? scrollMemo[route] : 0) : scrollMemo[route] || 0;
     if (navigated) scrollMemo[route] = 0;
-    if (desk && name !== 'welcome') { renderSide(); renderPane(); }
+    if (desk && name !== 'welcome' && name !== 'login') { renderSide(); renderPane(); }
     dirty = false;
   }
 
@@ -779,9 +983,9 @@
         + '<span class="grow">' + label + '</span>' + (extra || '') + '</button>';
     }
     var h = '<div class="sbrand"><span class="slogo">' + I.bookmark + '</span><span>SaveMind</span></div>'
-      + '<button class="btn pri" data-act="add" style="min-height:38px;width:100%">' + I.plusSm + ' Add link</button>'
+      + (canAnalyze() ? '<button class="btn pri" data-act="add" style="min-height:38px;width:100%">' + I.plusSm + ' Add link</button>' : '')
       + '<button class="ssearch" data-act="search">' + I.searchSm + '<span class="grow">Search</span><span class="src">⌘K</span></button>'
-      + item('#/home', 'Home', I.home)
+      + (web ? item('#/home', 'Dashboard', I.grid) : item('#/home', 'Home', I.home) + item('#/dashboard', 'Dashboard', I.grid))
       + item('#/inbox', 'Smart Inbox', I.inbox, pending ? '<span class="sbadge">' + pending + '</span>' : '')
       + item('#/planner', 'Planner', I.planner)
       + item('#/countries', 'Countries', I.globe)
@@ -799,7 +1003,7 @@
       : acc.error ? 'Sync paused' : acc.lastSync ? 'Synced ' + ago(acc.lastSync) : 'Waiting to sync';
     var good = acc.signedIn && !acc.error;
     h += '<div style="flex:1"></div><button class="saccount" data-act="settings"><span class="avatar" style="width:32px;height:32px;font-size:14px">'
-      + esc(initials(S.settings.name || 'A').charAt(0)) + '</span><span class="col grow" style="gap:1px"><span class="t" style="font-size:13px" dir="auto">' + esc(S.settings.name || '')
+      + esc(initials(S.settings.name || (S.account || {}).email || 'S').charAt(0)) + '</span><span class="col grow" style="gap:1px"><span class="t" style="font-size:13px" dir="auto">' + esc(S.settings.name || '')
       + '</span><span class="src" style="color:' + (good ? 'var(--green)' : 'var(--muted-2)') + ';font-weight:600">' + (good ? '● ' : '') + esc(status) + '</span></span></button>';
     side.innerHTML = h;
   }
@@ -817,7 +1021,7 @@
     pane.innerHTML = viewLink(paneId);
     pane.setAttribute('data-id', String(paneId));
     pane.scrollTop = keep;
-    document.querySelectorAll('#view [data-act="open"]').forEach(function (b) {
+    document.querySelectorAll('#view [data-act="open"]:not(.cpill)').forEach(function (b) {
       b.classList.toggle('selected', Number(b.getAttribute('data-id')) === paneId);
     });
   }
@@ -825,6 +1029,7 @@
   var lastOffer = null;
   /** On the Mac, offers to save a web link found on the clipboard (once per link). */
   function offerClipboard() {
+    if (web) return;
     if (!desk) return;
     var text = '';
     try { text = SM.readClipboard(); } catch (e) { return; }
@@ -861,6 +1066,11 @@
     function t(id, label, icon, route) {
       return '<button class="tab' + (active === id ? ' on' : '') + '" data-tab="' + route + '">' + icon + label
         + (id === 'inbox' && pending ? '<span class="dot">' + (pending > 99 ? '99+' : pending) + '</span>' : '') + '</button>';
+    }
+    if (web) {
+      tabs.innerHTML = t('home', 'Dashboard', I.grid, '#/home') + t('inbox', 'Inbox', I.inbox, '#/inbox')
+        + t('planner', 'Planner', I.planner, '#/planner') + t('collections', 'Collections', I.folder, '#/collections');
+      return;
     }
     tabs.innerHTML = t('home', 'Home', I.home, '#/home') + t('inbox', 'Inbox', I.inbox, '#/inbox')
       + '<button class="fab" aria-label="Add link" data-act="add">' + I.plus + '</button>'
@@ -922,7 +1132,7 @@
   function viewInbox() {
     var items = inboxItems();
     var h = '<div class="body"><div class="row between"><h1 class="h1">Smart Inbox</h1><span class="chip">' + items.length + ' pending</span></div>';
-    if (!S.settings.hasKey && items.length) h += keyNotice();
+    if (canAnalyze() && !S.settings.hasKey && items.length) h += keyNotice();
     if (!items.length) {
       return h + '<div class="empty"><div class="big">' + I.check + '</div><p class="t">All caught up</p>'
         + '<p class="s">New links land here for a quick review of Claude\'s brief, collection and action.</p></div></div>';
@@ -1282,6 +1492,7 @@
       + '<input id="setName" class="inp" dir="auto" maxlength="40" value="' + esc(st.name) + '"></div></div>';
 
     h += accountSection();
+    if (web) return h + webSettingsTail();
 
     h += '<h3 class="h2">Claude</h3><div class="group"><div class="item">';
     h += '<div class="row between"><span class="lbl">API key</span>' + (st.hasKey ? '<span class="ok">Connected</span>' : '<span class="bad">Not connected</span>') + '</div>';
@@ -1320,6 +1531,14 @@
 
     h += '<p class="src" style="text-align:center">SaveMind ' + esc(S.version || '') + ' · Built to the SaveMind PRD v1.0</p>';
     return h + '</div>';
+  }
+
+  function webSettingsTail() {
+    return '<h3 class="h2">About the web dashboard</h3><div class="group"><div class="item"><p class="s">'
+      + 'This dashboard shows and edits the links synced to your account. Saving and analyzing new links happens in the SaveMind app on Android or Mac; '
+      + 'they appear here within seconds. Your Claude API key is never needed here.</p></div>'
+      + '<div class="item"><button class="btn sec" data-act="export">Export backup</button></div></div>'
+      + '<p class="src" style="text-align:center">SaveMind web ' + esc(S.version || '') + '</p></div>';
   }
 
   function accountSection() {
@@ -1572,7 +1791,7 @@
       + '<button class="opt" data-act="deadline" data-id="' + id + '">' + (hasDeadline(l) ? 'Edit deadline' : 'Set deadline') + '</button>'
       + '<button class="opt" data-act="share" data-id="' + id + '">Share link</button>'
       + '<button class="opt" data-act="copy" data-id="' + id + '">Copy link</button>'
-      + '<button class="opt" data-act="retry" data-id="' + id + '">Analyze again</button>'
+      + (canAnalyze() ? '<button class="opt" data-act="retry" data-id="' + id + '">Analyze again</button>' : '')
       + '<button class="opt" data-act="archive" data-id="' + id + '">' + (l.archived ? 'Unarchive' : 'Archive') + '</button>'
       + '<button class="opt red" data-act="delete" data-id="' + id + '">Delete</button></div>');
   }
@@ -1610,7 +1829,13 @@
     setTimeout(function () { t.remove(); }, 2200);
   }
 
+  var ANALYSIS_ACTS = ['add', 'retry', 'context', 'refAdd', 'planReanalyze', 'countryReanalyze', 'reanalyze'];
+
   function doAction(act, id, el) {
+    if (!canAnalyze() && ANALYSIS_ACTS.indexOf(act) >= 0) {
+      toast('Save and analyze links in the SaveMind app on Android or Mac.');
+      return;
+    }
     var l = id ? linkById(id) : null;
     switch (act) {
       case 'back': back(); break;
@@ -1700,7 +1925,7 @@
       case 'signUp': auth(true); break;
       case 'syncNow': SM.syncNow(); toast('Syncing…'); break;
       case 'signOut':
-        confirmSheet('Sign out?', 'Your links stay on this ' + deviceWord() + ' and in your account. This ' + deviceWord() + ' stops syncing until you sign in again.', 'Sign out', function () {
+        confirmSheet('Sign out?', web ? 'Your links stay in your account. This browser removes its copy until you sign in again.' : 'Your links stay on this ' + deviceWord() + ' and in your account. This ' + deviceWord() + ' stops syncing until you sign in again.', 'Sign out', function () {
           SM.signOut();
           toast('Signed out');
         });
@@ -1710,6 +1935,7 @@
         var nm = document.getElementById('wName').value.trim();
         if (!nm) { toast('Enter your name'); document.getElementById('wName').focus(); break; }
         saveSettings({ name: nm });
+        if (web) { finishWelcome(); break; }
         welcomeStep = 2;
         render(true);
         break;
@@ -1723,6 +1949,7 @@
       }
       case 'wNext2': welcomeStep = 3; render(true); break;
       case 'wDone': finishWelcome(); break;
+      case 'dashTable': dashTable[el.getAttribute('data-v')] = !dashTable[el.getAttribute('data-v')]; render(false); break;
       case 'collMode': go(el.getAttribute('data-v') === 'countries' ? '#/countries' : '#/collections', true); break;
       case 'countryFilter': countryFilter = el.getAttribute('data-v'); render(false); break;
       case 'countries': closeSheet(); countrySheet(id); break;
@@ -1861,6 +2088,7 @@
   window.SMNative = {
     changed: function () {
       load();
+      if (web && !(S.account || {}).signedIn) { if (!typing()) render(false); return; }
       var route = current();
       if (desk && !document.getElementById('overlay').innerHTML && route !== '#/add' && route !== '#/welcome' && !typing()) { render(false); return; }
       if (desk) { renderSide(); }
@@ -1876,7 +2104,7 @@
   };
 
   function tabOf(route) {
-    if (route === '#/home') return 'home';
+    if (route === '#/home' || route === '#/dashboard') return 'home';
     if (route === '#/inbox') return 'inbox';
     if (route === '#/search') return 'search';
     if (route === '#/planner') return 'planner';
@@ -1889,6 +2117,7 @@
   document.addEventListener('dragover', function (e) { e.preventDefault(); });
   document.addEventListener('drop', function (e) {
     e.preventDefault();
+    if (!canAnalyze()) return;
     var dt = e.dataTransfer;
     var text = dt ? (dt.getData('text/uri-list') || dt.getData('text/plain') || '') : '';
     var url = text ? SM.validateUrl(text.split('\n')[0]) : '';
@@ -1901,6 +2130,32 @@
     else if ((e.metaKey || e.ctrlKey) && (e.key === 'n' || e.key === 'N')) { e.preventDefault(); doAction('add', 0, null); }
     else if (e.key === 'Escape' && desk) { back(); }
   });
+  var resizeTimer = null;
+  window.addEventListener('resize', function () {
+    if (!web) return;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      var was = desk;
+      load();
+      if (was !== desk) render(false);
+    }, 150);
+  });
+
+  // Hover tooltips for chart marks (data-tip).
+  var tipEl = null;
+  function showTip(t) {
+    if (!t) { if (tipEl) tipEl.hidden = true; return; }
+    if (!tipEl) { tipEl = document.createElement('div'); tipEl.className = 'tip'; tipEl.setAttribute('role', 'tooltip'); document.body.appendChild(tipEl); }
+    tipEl.textContent = t.getAttribute('data-tip');
+    tipEl.hidden = false;
+    var r = t.getBoundingClientRect();
+    tipEl.style.left = Math.max(8, Math.min(window.innerWidth - tipEl.offsetWidth - 8, r.left + r.width / 2 - tipEl.offsetWidth / 2)) + 'px';
+    tipEl.style.top = Math.max(8, r.top - tipEl.offsetHeight - 8) + 'px';
+  }
+  document.addEventListener('mouseover', function (e) { showTip(e.target.closest ? e.target.closest('[data-tip]') : null); });
+  document.addEventListener('focusin', function (e) { showTip(e.target.closest ? e.target.closest('[data-tip]') : null); });
+  document.addEventListener('scroll', function () { showTip(null); }, true);
+
   window.addEventListener('focus', function () { setTimeout(offerClipboard, 200); });
 
   load();
