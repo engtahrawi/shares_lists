@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="دليل تثبيت SaveMind واستخدامه على Android و Mac والويب.">
+<meta name="theme-color" content="#16181D">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>دليل SaveMind</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Readex+Pro:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a reading column with a sticky table of contents beside it on wide screens; RTL throughout. */
+:root {
+  --bg: #F5F6F8;
+  --surface: #FFFFFF;
+  --ink: #16181D;
+  --muted: #4A4F5C;
+  --line: #E2E5EB;
+  --accent: #2446E0;
+  --accent-soft: #E6EBFF;
+  --red: #8A2E2E; --red-soft: #F4E7E7;
+  --amber: #8A5300; --amber-soft: #FFF1DB;
+  --green: #1E6B45; --green-soft: #E2F3EA;
+  --code-bg: #16181D; --code-fg: #E9ECF2;
+  --display: 'Readex Pro', 'IBM Plex Sans Arabic', system-ui, sans-serif;
+  --text: 'IBM Plex Sans Arabic', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111318; --surface: #1A1D24; --ink: #ECEEF3; --muted: #A5ABB8; --line: #2B2F39;
+  --accent: #8EA2FF; --accent-soft: #232B4D;
+  --red: #F0A0A0; --red-soft: #3A2224; --amber: #F3C27A; --amber-soft: #3A2E1A; --green: #8FD9B0; --green-soft: #1C3328;
+  --code-bg: #0B0C10; --code-fg: #E9ECF2; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #111318; --surface: #1A1D24; --ink: #ECEEF3; --muted: #A5ABB8; --line: #2B2F39;
+  --accent: #8EA2FF; --accent-soft: #232B4D;
+  --red: #F0A0A0; --red-soft: #3A2224; --amber: #F3C27A; --amber-soft: #3A2E1A; --green: #8FD9B0; --green-soft: #1C3328;
+  --code-bg: #0B0C10; --code-fg: #E9ECF2; color-scheme: dark; }
+
+body { background: var(--bg); color: var(--ink); font-family: var(--text); font-size: 16px; line-height: 1.8;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width: 1100px; margin: 0 auto; padding-block: 40px 64px; display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 48px; align-items: start; }
+header.top { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 14px; padding-bottom: 8px; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.logo { width: 44px; height: 44px; border-radius: 12px; background: #2446E0; display: flex; align-items: center; justify-content: center; flex: none; }
+.brand b { font-family: var(--display); font-size: 22px; letter-spacing: .01em; }
+h1 { font-family: var(--display); font-size: clamp(30px, 5vw, 44px); line-height: 1.25; margin: 0; text-wrap: balance; max-width: 22ch; }
+.lead { font-size: 18px; color: var(--muted); max-width: 62ch; margin: 0; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px; }
+.fact { font-size: 13px; font-weight: 600; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; }
+
+nav.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+nav.toc .h { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .04em; margin-bottom: 6px; }
+nav.toc a { color: var(--muted); text-decoration: none; padding: 5px 10px; border-radius: 8px; border-inline-start: 2px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--ink); background: var(--surface); outline: none; border-inline-start-color: var(--accent); }
+
+main { display: flex; flex-direction: column; gap: 56px; min-width: 0; }
+section { display: flex; flex-direction: column; gap: 14px; scroll-margin-top: 24px; }
+h2 { font-family: var(--display); font-size: 26px; margin: 0; line-height: 1.35; text-wrap: balance; }
+h3 { font-family: var(--display); font-size: 18px; margin: 8px 0 0; }
+p { margin: 0; max-width: 68ch; }
+.kicker { font-size: 13px; font-weight: 700; color: var(--accent); }
+ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+ol.steps > li { counter-increment: s; display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; align-items: start; }
+ol.steps > li::before { content: counter(s, arabic-indic); width: 30px; height: 30px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 15px; margin-top: 2px; }
+ul.plain { margin: 0; padding-inline-start: 20px; display: flex; flex-direction: column; gap: 6px; max-width: 68ch; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
+.note { border-radius: 14px; padding: 14px 16px; font-size: 15px; background: var(--amber-soft); color: var(--ink); border-inline-start: 4px solid var(--amber); }
+.note.info { background: var(--accent-soft); border-inline-start-color: var(--accent); }
+.note b { font-weight: 700; }
+
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; }
+.feature { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.feature b { font-family: var(--display); font-size: 16px; }
+.feature span { color: var(--muted); font-size: 15px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 10px; }
+.chip { font-size: 14px; font-weight: 600; padding: 6px 12px; border-radius: 999px; display: inline-flex; gap: 8px; align-items: center; }
+.chip.u { background: var(--red-soft); color: var(--red); }
+.chip.s { background: var(--amber-soft); color: var(--amber); }
+.chip.l { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+.chip.c { background: var(--bg); color: var(--muted); text-decoration: line-through; border: 1px solid var(--line); }
+
+.code { position: relative; background: var(--code-bg); color: var(--code-fg); border-radius: 12px; padding: 14px 16px; padding-inline-end: 84px; font-family: var(--mono); font-size: 13px; line-height: 1.6; direction: ltr; text-align: left; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+.copy { position: absolute; top: 10px; right: 10px; font-family: var(--text); font-size: 12px; font-weight: 600; background: #2B2F38; color: #fff; border: 0; border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+.copy:focus-visible { outline: 2px solid #8EA2FF; }
+.ltr { direction: ltr; unicode-bidi: isolate; font-family: var(--mono); font-size: .92em; }
+
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 15px; min-width: 520px; }
+th, td { text-align: start; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 13px; color: var(--muted); font-weight: 700; }
+tr:last-child td { border-bottom: 0; }
+
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 4px 16px; }
+details + details { margin-top: 8px; }
+summary { cursor: pointer; font-weight: 600; padding: 10px 0; }
+summary:focus-visible { outline: 2px solid var(--accent); border-radius: 6px; }
+details p { padding-bottom: 12px; color: var(--muted); }
+
+footer { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); padding-top: 20px; }
+
+@media (max-width: 860px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); gap: 28px; padding-block: 24px 48px; }
+  nav.toc { position: static; flex-direction: row; flex-wrap: wrap; gap: 6px; }
+  nav.toc .h { width: 100%; margin: 0; }
+  nav.toc a { background: var(--surface); border: 1px solid var(--line); padding: 3px 10px; font-size: 13px; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+</head>
+<body>
+
+
+<div dir="rtl" lang="ar">
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><span class="logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M7 3h10a2 2 0 0 1 2 2v16l-7-3.8L5 21V5a2 2 0 0 1 2-2z"/></svg></span><b>SaveMind</b></div>
+    <h1>دليل استخدام SaveMind</h1>
+    <p class="lead">تطبيق يحفظ الروابط التي تصلك من واتساب ولينكدإن ويوتيوب والمتصفح، ويقرأها بمساعدة Claude فيكتب لك ملخصاً قصيراً، ويجد الموعد النهائي، ويقترح المجموعة المناسبة، ويرتّب لك أي فرصة تبدأ العمل عليها أولاً.</p>
+    <div class="facts"><span class="fact">Android</span><span class="fact">Mac</span><span class="fact">الويب</span><span class="fact">يحتاج مفتاح Claude API مدفوع</span></div>
+  </header>
+
+  <nav class="toc" aria-label="محتويات الدليل">
+    <span class="h">المحتويات</span>
+    <a href="#before">قبل أن تبدأ</a>
+    <a href="#install">التثبيت</a>
+    <a href="#first">أول تشغيل</a>
+    <a href="#save">حفظ رابط</a>
+    <a href="#link">صفحة الرابط</a>
+    <a href="#deadlines">المواعيد النهائية</a>
+    <a href="#planner">المخطِّط</a>
+    <a href="#organize">المجموعات والدول</a>
+    <a href="#sync">المزامنة</a>
+    <a href="#web">لوحة الويب</a>
+    <a href="#settings">الإعدادات والنسخ الاحتياطي</a>
+    <a href="#privacy">الخصوصية والتكلفة</a>
+    <a href="#faq">أسئلة شائعة</a>
+  </nav>
+
+  <main>
+    <section id="before">
+      <span class="kicker">قبل أن تبدأ</span>
+      <h2>ما الذي تحتاجه</h2>
+      <ol class="steps">
+        <li><div><b>هاتف Android</b> (إصدار 7 أو أحدث)، أو <b>جهاز Mac</b>، أو الاثنين معاً.</div></li>
+        <li><div><b>مفتاح Claude API</b> من موقع <span class="ltr">console.anthropic.com</span>. هذا حساب مطوّرين يُدفع حسب الاستخدام، وهو منفصل عن اشتراك Claude Pro. <b>اشتراك Claude Pro وحده لا يكفي.</b></div></li>
+        <li><div><b>بريد إلكتروني وكلمة سر</b> إذا أردت المزامنة بين الهاتف والماك والويب. هذه خطوة اختيارية.</div></li>
+      </ol>
+      <div class="panel">
+        <h3 style="margin:0">طريقة الحصول على المفتاح</h3>
+        <ol class="steps">
+          <li><div>افتح <span class="ltr">console.anthropic.com</span> وأنشئ حساباً.</div></li>
+          <li><div>من قسم <span class="ltr">Billing</span> أضف رصيداً صغيراً، خمسة دولارات تكفي لمئات الروابط.</div></li>
+          <li><div>من قسم <span class="ltr">API Keys</span> اضغط <span class="ltr">Create Key</span>، وانسخ المفتاح الذي يبدأ بـ <span class="ltr">sk-ant-</span>.</div></li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="install">
+      <span class="kicker">التثبيت</span>
+      <h2>تثبيت التطبيق</h2>
+      <h3>على Android</h3>
+      <ol class="steps">
+        <li><div>استلم ملف <span class="ltr">SaveMind.apk</span> مني على الخاص، وافتحه من الهاتف.</div></li>
+        <li><div>إذا ظهرت رسالة بأن التثبيت من مصادر غير معروفة غير مسموح، اضغط <b>الإعدادات</b> ثم فعّل <b>السماح من هذا المصدر</b>، وارجع واضغط <b>تثبيت</b>.</div></li>
+        <li><div>إذا ظهر تنبيه Play Protect اختر <b>تثبيت على أي حال</b>. التطبيق موقّع بمفتاح ثابت، فالتحديثات القادمة تُثبّت فوقه دون حذف بياناتك.</div></li>
+        <li><div>عند أول فتح اسمح بالإشعارات حتى تصلك تذكيرات المواعيد النهائية.</div></li>
+      </ol>
+
+      <h3>على Mac</h3>
+      <ol class="steps">
+        <li><div>اعرف نوع جهازك: من قائمة التفاحة اختر <span class="ltr">About This Mac</span>. إذا ظهر <span class="ltr">Apple M1/M2/M3/M4</span> فاطلب ملف <span class="ltr">arm64</span>، وإذا ظهر <span class="ltr">Intel</span> فاطلب ملف <span class="ltr">x64</span>.</div></li>
+        <li><div>نزّل الملف إلى مجلد التنزيلات <span class="ltr">Downloads</span> ولا تفك ضغطه.</div></li>
+        <li><div>افتح تطبيق <span class="ltr">Terminal</span> (اضغط <span class="ltr">Command + Space</span> واكتب <span class="ltr">Terminal</span>)، والصق الأمر التالي واضغط <span class="ltr">Enter</span>:</div></li>
+      </ol>
+      <div class="code" id="macCmd"><button class="copy" type="button" data-copy="macCmd">نسخ</button>cd ~/Downloads &amp;&amp; Z=$(ls -t | grep -E '^SaveMind-.*-mac-.*[.]zip$' | head -1) &amp;&amp; rm -rf /tmp/savemind &amp;&amp; mkdir /tmp/savemind &amp;&amp; if [ -n "$Z" ]; then ditto -x -k "$Z" /tmp/savemind; else cp -R SaveMind.app /tmp/savemind/; fi &amp;&amp; rm -rf /Applications/SaveMind.app &amp;&amp; mv /tmp/savemind/SaveMind.app /Applications/ &amp;&amp; xattr -cr /Applications/SaveMind.app &amp;&amp; codesign --force --deep --sign - /Applications/SaveMind.app &amp;&amp; open /Applications/SaveMind.app &amp;&amp; echo "SaveMind installed"</div>
+      <p>عندما تظهر عبارة <span class="ltr">SaveMind installed</span> يفتح التطبيق، وتجده بعدها في مجلد التطبيقات. التطبيق غير موزّع عبر متجر Apple، لذلك يوقّعه الأمر محلياً على جهازك حتى يسمح macOS بفتحه، ولا يغيّر شيئاً آخر.</p>
+      <div class="note">إذا ظهرت رسالة خطأ عند فك الضغط فغالباً لم يكتمل التنزيل. نزّل الملف مرة أخرى.</div>
+    </section>
+
+    <section id="first">
+      <span class="kicker">أول تشغيل</span>
+      <h2>ثلاث خطوات ترحيبية</h2>
+      <ol class="steps">
+        <li><div><b>اسمك:</b> يظهر في التحية على الشاشة الرئيسية.</div></li>
+        <li><div><b>مفتاح Claude:</b> الصقه واضغط حفظ. يُحفظ مشفّراً على جهازك فقط ولا يُرفع إلى أي مكان. يمكنك التخطي وإضافته لاحقاً من الإعدادات، وتبقى الروابط محفوظة بانتظار التحليل.</div></li>
+        <li><div><b>المزامنة:</b> أنشئ حساباً بالبريد وكلمة السر إذا أردت نفس الروابط على الهاتف والماك والويب، أو تخطَّ الخطوة.</div></li>
+      </ol>
+    </section>
+
+    <section id="save">
+      <span class="kicker">الاستخدام اليومي</span>
+      <h2>حفظ رابط</h2>
+      <div class="grid2">
+        <div class="feature"><b>من الهاتف</b><span>في أي تطبيق (واتساب، لينكدإن، يوتيوب، المتصفح) اضغط <b>مشاركة</b> واختر <b>SaveMind</b>. يُحفظ الرابط وتبقى في التطبيق الذي كنت فيه. إذا شاركت نص المنشور كاملاً مع الرابط يستفيد Claude منه أيضاً.</span></div>
+        <div class="feature"><b>من الماك</b><span>اضغط <b>Add link</b> والصق الرابط، أو اسحب الرابط من المتصفح وأفلته على نافذة التطبيق. عند فتح التطبيق يعرض عليك أي رابط منسوخ في الحافظة.</span></div>
+      </div>
+      <p>بعد ثوانٍ يقرأ Claude الصفحة ويكتب العنوان والملخص ونوع المحتوى والوسوم، ويقترح مجموعة، ويستخرج الموعد النهائي والدولة وتقدير أيام العمل وخطوات التحضير. إذا كان الرابط محفوظاً من قبل ينبّهك التطبيق قبل تكراره.</p>
+      <p>الروابط الجديدة تظهر في <b>الوارد الذكي</b> (Smart Inbox) مع اقتراح Claude للمجموعة. اضغط <b>Accept</b>، أو <b>Keep in Inbox</b>، أو انقلها لمجموعة أخرى.</p>
+    </section>
+
+    <section id="link">
+      <span class="kicker">الاستخدام اليومي</span>
+      <h2>صفحة الرابط</h2>
+      <p>عند فتح أي رابط محفوظ تجد فيها:</p>
+      <ul class="plain">
+        <li><b>الموعد النهائي</b> بلون يدل على قربه، مع زر تعديل.</li>
+        <li><b>خطتك</b> (قسم يُفتح بالضغط): أيام العمل المقدّرة، وتاريخ البدء المقترح، وقائمة خطوات تضع عليها علامة عند الإنجاز، ويمكنك إضافة خطوات أو حذفها.</li>
+        <li><b>ملخص Claude</b> للمحتوى.</li>
+        <li><b>روابط مرجعية</b> (قسم يُفتح بالضغط): أضف صفحة الدعوة الرسمية أو الإرشادات أو الأسئلة الشائعة، حتى خمسة روابط، فيقرأها Claude مع الرابط الأصلي ويحدّث الملخص والموعد والدولة والخطوات. الصفحات التي تتطلب تسجيل دخول لا يمكن قراءتها.</li>
+        <li><b>الوسوم والملاحظات</b> والمفضلة والأرشفة والمشاركة.</li>
+        <li>من قائمة <b>⋯</b> اختر <b>Analyze again</b> لإعادة التحليل، ويمكن إضافة سياق إضافي يساعد Claude.</li>
+      </ul>
+      <div class="note info"><b>تعديلاتك محفوظة:</b> أي عنوان أو موعد أو دولة أو تقدير أو خطوات تعدّلها بنفسك تُعلَّم بعبارة "Set by you" ولا تغيّرها أي إعادة تحليل لاحقة.</div>
+    </section>
+
+    <section id="deadlines">
+      <span class="kicker">المواعيد</span>
+      <h2>المواعيد النهائية والتذكيرات</h2>
+      <p>كل موعد يأخذ لوناً حسب ما تبقّى من وقت:</p>
+      <div class="chips">
+        <span class="chip u">3 أيام أو أقل</span>
+        <span class="chip s">من 4 إلى 14 يوماً</span>
+        <span class="chip l">أكثر من 14 يوماً</span>
+        <span class="chip c">انتهى (Closed)</span>
+      </div>
+      <p>إذا لم يجد Claude موعداً تظهر عبارة "No deadline found" مع زر لإضافته يدوياً. من شاشة تعديل الموعد تختار أيضاً التذكير: قبل ثلاثة أيام، أو قبل أسبوع، أو إيقافه.</p>
+    </section>
+
+    <section id="planner">
+      <span class="kicker">التخطيط</span>
+      <h2>المخطِّط: بماذا أبدأ؟</h2>
+      <p>تبويب <b>Planner</b> يرتّب كل الفرص المفتوحة حسب <b>تاريخ البدء</b>، وليس حسب الموعد النهائي فقط. القاعدة:</p>
+      <div class="panel" style="text-align:center;font-family:var(--display);font-size:17px">تاريخ البدء = الموعد النهائي − أيام العمل المقدّرة − يوم احتياطي</div>
+      <p>لذلك قد تظهر فرصة كبيرة تُغلق بعد أسبوعين قبل فرصة صغيرة تُغلق بعد أسبوع. المجموعات: <b>ابدأ اليوم</b>، <b>هذا الأسبوع</b>، <b>لاحقاً</b>، و<b>فاتت</b>.</p>
+      <p>إذا زاد مجموع العمل المطلوب في أسبوع واحد عن الأيام المتاحة قبله، يظهر تنبيه بلون كهرماني يقترح الفرصة التي تبدأها مبكراً أو تتركها. وتظهر أول الفرص في قسم <b>Up next</b> على الشاشة الرئيسية.</p>
+    </section>
+
+    <section id="organize">
+      <span class="kicker">التنظيم</span>
+      <h2>المجموعات والدول</h2>
+      <div class="grid2">
+        <div class="feature"><b>المجموعات</b><span>أنشئها وأعد تسميتها واحذفها من تبويب Collections. الشاشة الرئيسية تُخفي المجموعات الفارغة، وتبقى ظاهرة في تبويب المجموعات.</span></div>
+        <div class="feature"><b>الدول</b><span>يحدد Claude دولة الفرصة (مكان انعقادها أو الجهة المستضيفة)، وقد تكون أكثر من دولة أو "Online / anywhere". بدّل بين Collections و Countries لتتصفح حسب الدولة، واضغط على الدولة في صفحة الرابط لتغييرها.</span></div>
+      </div>
+      <p>للفرص القديمة المحفوظة قبل إضافة هذه الميزات يظهر زر <b>Analyze</b> يطلب من Claude تقدير العمل أو تحديد الدولة لها دفعة واحدة.</p>
+    </section>
+
+    <section id="sync">
+      <span class="kicker">الحساب</span>
+      <h2>المزامنة بين الأجهزة</h2>
+      <ol class="steps">
+        <li><div>من <b>الإعدادات</b> ثم <b>Account &amp; sync</b> أنشئ حساباً على جهاز واحد، ثم سجّل الدخول بنفس البريد وكلمة السر على الأجهزة الأخرى.</div></li>
+        <li><div>الروابط والمجموعات والمواعيد والخطط والملاحظات تتزامن خلال ثوانٍ، وكل جهاز يعمل دون إنترنت ثم يلحق عند الاتصال.</div></li>
+        <li><div>إذا عُدّل الشيء نفسه على جهازين، يُعتمد آخر تعديل.</div></li>
+      </ol>
+      <div class="note info">مفتاح Claude لا يُزامَن أبداً. أدخله على كل جهاز تريد أن يحلل الروابط عليه (يمكن استخدام نفس المفتاح على الهاتف والماك).</div>
+    </section>
+
+    <section id="web">
+      <span class="kicker">الويب</span>
+      <h2>لوحة التحكم على الويب</h2>
+      <p>افتح <a href="./"><span class="ltr">engtahrawi.github.io/shares_lists</span></a> من أي متصفح، وسجّل الدخول بحساب المزامنة نفسه. كل شخص يرى روابطه فقط.</p>
+      <div class="grid2">
+        <div class="feature"><b>المؤشرات</b><span>الفرص المفتوحة، وما يُغلق هذا الأسبوع، وأيام العمل في الأسابيع الأربعة القادمة، وخطوات التحضير المنجزة.</span></div>
+        <div class="feature"><b>تقويم خمسة أسابيع</b><span>كل موعد في يومه وبلون قربه. اضغط عليه لفتح تفاصيله بجانب اللوحة.</span></div>
+        <div class="feature"><b>عبء العمل الأسبوعي</b><span>أعمدة تقارن العمل المطلوب كل أسبوع بخمسة أيام عمل، والأسبوع المحمّل فوق طاقته باللون الأحمر.</span></div>
+        <div class="feature"><b>الفرص حسب الدولة</b><span>عدد الفرص المفتوحة لكل دولة، والضغط على الدولة يفتح فرصها.</span></div>
+      </div>
+      <p>مرّر الماوس على أي عمود لترى الرقم بالضبط، واضغط <b>Table view</b> لعرض أي مخطط كجدول. التعديلات على الويب تصل للهاتف والماك فوراً. على الآيفون افتح الرابط في Safari واختر <b>إضافة إلى الشاشة الرئيسية</b>.</p>
+      <div class="note">في هذه المرحلة، حفظ الروابط الجديدة وتحليلها يتم من تطبيق Android أو Mac فقط، وتظهر على الويب خلال ثوانٍ. عند تسجيل الخروج يمسح المتصفح نسخته من بياناتك، وهذا مناسب لأي جهاز مشترك.</div>
+    </section>
+
+    <section id="settings">
+      <span class="kicker">الإعدادات</span>
+      <h2>الإعدادات والنسخ الاحتياطي</h2>
+      <div class="tablewrap"><table>
+        <thead><tr><th>الإعداد</th><th>ماذا يفعل</th></tr></thead>
+        <tbody>
+          <tr><td>النموذج</td><td>Opus هو الافتراضي والأدق. Sonnet أسرع، و Haiku الأرخص.</td></tr>
+          <tr><td>لغة الملخص</td><td>تلقائي حسب لغة الصفحة، أو العربية دائماً، أو الإنجليزية دائماً.</td></tr>
+          <tr><td>Auto-file strong matches</td><td>عند تفعيله ينقل التطبيق الرابط لمجموعة Claude المقترحة حين تكون ثقته عالية.</td></tr>
+          <tr><td>اختبار المفتاح (Test)</td><td>يتأكد أن المفتاح يعمل وأن في الحساب رصيداً.</td></tr>
+          <tr><td>تصدير واستيراد</td><td>ملف JSON بكل روابطك ومجموعاتك، للاحتفاظ بنسخة أو للنقل.</td></tr>
+          <tr><td>حذف كل البيانات</td><td>يمسح الروابط من هذا الجهاز، مع خيار حذف المفتاح أيضاً.</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="privacy">
+      <span class="kicker">الخصوصية والتكلفة</span>
+      <h2>أين تذهب بياناتك وكم تكلّف</h2>
+      <ul class="plain">
+        <li>الروابط تُحفظ على جهازك. عند تفعيل المزامنة تُحفظ أيضاً في خادم المزامنة، وقواعد الوصول تسمح لكل حساب بقراءة روابطه فقط.</li>
+        <li>عند التحليل يُرسل محتوى الصفحة إلى Claude عبر مفتاحك أنت، والتكلفة على حسابك في Anthropic مباشرة.</li>
+        <li>التكلفة عادةً سنتات قليلة لكل رابط مع Opus، وأقل مع Sonnet أو Haiku. يمكنك متابعة الاستهلاك من <span class="ltr">console.anthropic.com</span>.</li>
+        <li>مفتاحك مشفّر على الجهاز ولا يُرسل إلى خادم المزامنة ولا إلى أي جهة غير Anthropic.</li>
+      </ul>
+    </section>
+
+    <section id="faq">
+      <span class="kicker">مساعدة</span>
+      <h2>أسئلة شائعة</h2>
+      <div>
+        <details><summary>الرابط بقي في حالة الانتظار ولم يُحلَّل</summary><p>تأكد من وجود مفتاح Claude في الإعدادات ومن الرصيد في حسابك (زر Test بجانب المفتاح في الإعدادات يوضّح السبب). الروابط المحفوظة على جهاز آخر يحللها ذلك الجهاز، فإذا حفظت رابطاً من الهاتف يجب أن يكون للهاتف مفتاح.</p></details>
+        <details><summary>ظهرت رسالة أن التحليل فشل أو أن المحتوى غير كافٍ</summary><p>بعض الصفحات تحتاج تسجيل دخول أو تحجب القراءة الآلية، مثل منشورات لينكدإن الخاصة. اضغط Add context والصق نص المنشور، ثم Retry. أو أضف رابطاً مرجعياً من الموقع الرسمي.</p></details>
+        <details><summary>هل يكفي اشتراك Claude Pro؟</summary><p>لا. التطبيق يحتاج مفتاح API من console.anthropic.com، وهو حساب منفصل يُدفع حسب الاستخدام.</p></details>
+        <details><summary>لم تصلني التذكيرات على الهاتف</summary><p>تأكد أن إشعارات SaveMind مسموحة من إعدادات الهاتف، وأن التطبيق غير مقيّد في توفير البطارية.</p></details>
+        <details><summary>الماك يقول إن التطبيق تالف أو لا يمكن فتحه</summary><p>شغّل أمر التثبيت من قسم التثبيت مرة أخرى، فهو يوقّع التطبيق محلياً. إذا فشل فك الضغط فنزّل الملف من جديد لأن التنزيل غالباً لم يكتمل.</p></details>
+        <details><summary>نسيت كلمة سر حساب المزامنة</summary><p>تواصل معي على الخاص وأساعدك. روابطك تبقى محفوظة على أجهزتك في كل الأحوال.</p></details>
+        <details><summary>كيف أحدّث التطبيق؟</summary><p>على Android ثبّت ملف APK الجديد فوق القديم مباشرة. على Mac شغّل أمر التثبيت نفسه مع الملف الجديد. بياناتك تبقى كما هي في الحالتين.</p></details>
+      </div>
+    </section>
+
+    <footer>لأي سؤال أو مشكلة، أو لطلب ملف التثبيت، تواصل معي على الخاص.</footer>
+  </main>
+</div>
+</div>
+<script>
+document.querySelectorAll('.copy').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var box = document.getElementById(b.getAttribute('data-copy'));
+    var text = box.textContent.replace(b.textContent, '').trim();
+    function done(msg) { b.textContent = msg; setTimeout(function () { b.textContent = 'نسخ'; }, 1800); }
+    function select() { var r = document.createRange(); r.selectNodeContents(box); var s = getSelection(); s.removeAllRanges(); s.addRange(r); done('حدّد النص وانسخه'); }
+    try { navigator.clipboard.writeText(text).then(function () { done('تم النسخ'); }, select); } catch (e) { select(); }
+  });
+});
+</script>
+
+</body>
+</html>

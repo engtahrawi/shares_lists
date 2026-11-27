@@ -55,4 +55,5 @@ html = html.replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/,
 if (!html.includes('sm-web.js') || !html.includes(sync.url)) throw new Error('index.html template changed');
 fs.writeFileSync(path.join(out, 'index.html'), html);
 fs.writeFileSync(path.join(out, '.nojekyll'), '');
+fs.copyFileSync(path.join(__dirname, 'guide.html'), path.join(out, 'guide.html'));
 console.log('Built web dashboard', version, 'into', out);

@@ -407,6 +407,7 @@
         + '<div class="row" style="gap:10px"><span style="flex:1;height:1px;background:var(--line)"></span><span class="src">New to SaveMind?</span><span style="flex:1;height:1px;background:var(--line)"></span></div>'
         + '<button class="btn sec" data-act="signUp">Create an account</button>'
         : '<p class="bad">Sync is not set up for this site.</p>')
+      + '<a class="link" href="guide.html" target="_blank" rel="noopener" style="text-align:center">How SaveMind works: read the guide (Arabic)</a>'
       + '<p class="src">Your links are stored on the SaveMind sync server and visible only to your account. Save new links with the Android or Mac app; they appear here within seconds.</p>'
       + '</div></section></div>';
   }
