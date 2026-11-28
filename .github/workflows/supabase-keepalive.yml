@@ -1,0 +1,41 @@
+name: Keep Supabase awake
+
+# Supabase pauses free projects after 7 days without activity. This sends two small requests
+# twice a week (a database read through the REST API and an auth health check) so the sync
+# server stays on even when nobody opens SaveMind for a while.
+
+on:
+  schedule:
+    - cron: '17 3 * * 1,4'   # Mondays and Thursdays, 03:17 UTC
+  workflow_dispatch:
+  push:
+    paths: ['.github/workflows/supabase-keepalive.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: desktop/sync-config.js
+          sparse-checkout-cone-mode: false
+
+      - name: Ping the database and auth service
+        run: |
+          URL=$(node -p "require('./desktop/sync-config.js').url")
+          KEY=$(node -p "require('./desktop/sync-config.js').anonKey")
+          for path in "/rest/v1/items?select=id&limit=1" "/auth/v1/health"; do
+            code=$(curl -s -o /tmp/out -w '%{http_code}' --retry 3 --retry-delay 10 \
+              -H "apikey: $KEY" "$URL$path")
+            echo "$path -> HTTP $code"
+            if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+              cat /tmp/out; echo
+              echo "::error::Supabase did not answer $path (HTTP $code). The project may be paused: restore it from the Supabase dashboard."
+              exit 1
+            fi
+          done
+          echo "Supabase is awake."
