@@ -3,6 +3,10 @@ name: Keep Supabase awake
 # Supabase pauses free projects after 7 days without activity. This sends two small requests
 # twice a week (a database read through the REST API and an auth health check) so the sync
 # server stays on even when nobody opens SaveMind for a while.
+#
+# GitHub switches off scheduled workflows in a repository with no activity for 60 days. The last
+# step re-enables this workflow through the GitHub API on every run, which restarts that count,
+# so the schedule keeps running without commits.
 
 on:
   schedule:
@@ -13,6 +17,7 @@ on:
 
 permissions:
   contents: read
+  actions: write   # to re-enable this workflow, see the last step
 
 jobs:
   ping:
@@ -42,3 +47,11 @@ jobs:
             fi
           done
           echo "Supabase is awake."
+
+      - name: Keep this schedule from being switched off
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X PUT "repos/${{ github.repository }}/actions/workflows/supabase-keepalive.yml/enable"
+          echo "Schedule re-enabled; GitHub's 60-day inactivity count starts again."
