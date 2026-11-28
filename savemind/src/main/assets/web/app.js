@@ -2052,7 +2052,19 @@
         if (!l) break;
         var i = Number(el.getAttribute('data-i'));
         var steps = stepsOf(l).map(function (x) { return { t: x.t, d: x.d ? 1 : 0 }; });
-        if (act === 'stepToggle') steps[i].d = steps[i].d ? 0 : 1; else steps.splice(i, 1);
+        if (act === 'stepToggle') {
+          var st = steps.splice(i, 1)[0];
+          st.d = st.d ? 0 : 1;
+          if (st.d) {
+            steps.push(st); // a finished step moves to the end; drag it to put it elsewhere
+          } else {
+            var firstDone = -1;
+            for (var k = 0; k < steps.length; k++) if (steps[k].d) { firstDone = k; break; }
+            steps.splice(firstDone < 0 ? steps.length : Math.min(i, firstDone), 0, st); // back above the finished ones
+          }
+        } else {
+          steps.splice(i, 1);
+        }
         l.steps = steps;
         SM.setSteps(id, JSON.stringify(steps));
         render(false);
