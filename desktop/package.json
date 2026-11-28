@@ -1,7 +1,7 @@
 {
   "name": "savemind-desktop",
   "productName": "SaveMind",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "SaveMind for Mac: AI-assisted link capture, synced with the Android app.",
   "main": "main.js",
   "private": true,

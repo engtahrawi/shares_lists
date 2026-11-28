@@ -38,8 +38,6 @@
     plusSm: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
     planner: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4M8 14h3M8 17h6"/></svg>',
     grip: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>',
-    arrowUp: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>',
-    arrowDown: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
     chevron: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
     searchSm: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>',
     link: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>'
@@ -723,7 +721,8 @@
     var l = x.l, p = x.p;
     var h = '<button class="prow" data-act="open" data-id="' + l.id + '"><span class="pnum' + (p.group === 'today' ? ' on' : '') + '">' + n + '</span>'
       + '<div class="col grow" style="gap:5px"><div class="row between" style="align-items:flex-start"><p class="t" dir="auto">' + esc(titleOf(l)) + '</p>' + startChip(p) + '</div>'
-      + '<span class="src">Closes ' + esc(shortDate(l.deadline_at)) + ' · ' + effortText(p) + '</span>';
+      + '<span class="src">Closes ' + esc(shortDate(l.deadline_at)) + ' · ' + effortText(p) + '</span>'
+      + (l.progress ? '<span class="pnow clamp2">' + esc(l.progress) + '</span>' : '');
     if (p.steps.length) {
       h += '<div class="row"><div class="pbar"><div style="width:' + Math.round(100 * p.done / p.steps.length) + '%"></div></div>'
         + '<span class="src" style="font-weight:600">' + p.done + ' of ' + p.steps.length + ' steps</span></div>';
@@ -826,15 +825,12 @@
     if (open) {
       h += '<div class="pbody">';
       if (p.steps.length) {
-        var last = p.steps.length - 1;
         h += '<div class="psteps" data-id="' + l.id + '">' + p.steps.map(function (st, i) {
           return '<div class="pstep' + (st.d ? ' done' : '') + '" data-i="' + i + '">'
             + '<span class="pgrip" data-i="' + i + '" title="Drag to reorder" aria-hidden="true">' + I.grip + '</span>'
             + '<button class="pcheck' + (st.d ? ' on' : '') + '" data-act="stepToggle" data-id="' + l.id + '" data-i="' + i
             + '" role="checkbox" aria-checked="' + !!st.d + '" aria-label="' + esc(st.t) + '">' + (st.d ? '✓' : '') + '</button>'
             + '<button class="ptext grow" data-act="stepEdit" data-id="' + l.id + '" data-i="' + i + '" dir="auto" title="Edit step">' + esc(st.t) + '</button>'
-            + '<button class="pmove" data-act="stepUp" data-id="' + l.id + '" data-i="' + i + '" aria-label="Move up"' + (i === 0 ? ' disabled' : '') + '>' + I.arrowUp + '</button>'
-            + '<button class="pmove" data-act="stepDown" data-id="' + l.id + '" data-i="' + i + '" aria-label="Move down"' + (i === last ? ' disabled' : '') + '>' + I.arrowDown + '</button>'
             + '<button class="pdel" data-act="stepRemove" data-id="' + l.id + '" data-i="' + i + '" aria-label="Remove step">×</button></div>';
         }).join('') + '</div>';
       } else {
@@ -897,6 +893,18 @@
   }
   document.addEventListener('pointerup', endStepDrag);
   document.addEventListener('pointercancel', endStepDrag);
+
+  /** The user's own note on where they are with this link, shown at the top of its page. */
+  function progressBlock(l) {
+    if (!l.progress) {
+      return '<button class="progress empty" data-act="progressEdit" data-id="' + l.id + '">' + I.pin
+        + '<span class="col grow" style="gap:2px"><span class="t" style="font-size:14px">Where are you with this?</span>'
+        + '<span class="src">Note your last step, e.g. Sent emails, waiting for replies from supervisors</span></span></button>';
+    }
+    return '<button class="progress" data-act="progressEdit" data-id="' + l.id + '" aria-label="Edit where you are">'
+      + '<span class="col grow" style="gap:3px"><span class="plabel">Where I am · ' + esc(l.progress_at ? ago(l.progress_at) : '') + '</span>'
+      + '<span class="ptxt">' + esc(l.progress) + '</span></span><span class="src" style="font-weight:600">Edit</span></button>';
+  }
 
   function levelChip(l) {
     if (l.status === 'processing') return '<span class="chip proc">Processing</span>';
@@ -1353,6 +1361,7 @@
         : needsCountry(l) ? '<button class="chip" data-act="countries" data-id="' + l.id + '">+ Country</button>' : '')
       + (l.archived ? '<span class="chip">Archived</span>' : '') + '</div>';
 
+    h += progressBlock(l);
     h += deadlineBlock(l);
     h += planSection(l);
 
@@ -2049,12 +2058,17 @@
         render(false);
         break;
       }
-      case 'stepUp': case 'stepDown': {
+      case 'progressEdit':
         if (!l) break;
-        var from = Number(el.getAttribute('data-i'));
-        moveStep(l, from, act === 'stepUp' ? from - 1 : from + 1);
+        promptSheet({ title: 'Where are you with this?', hint: 'Your last step or what you are waiting for. It shows at the top of this opportunity and in the Planner.',
+          value: l.progress || '', placeholder: 'e.g. Sent emails, waiting for replies from supervisors', ok: 'Save', multiline: true }, function (v) {
+          SM.updateLink(id, JSON.stringify({ progress: v.trim().slice(0, 500) }));
+          l.progress = v.trim() || null;
+          l.progress_at = l.progress ? Date.now() : null;
+          render(false);
+          toast(l.progress ? 'Saved' : 'Note cleared');
+        });
         break;
-      }
       case 'stepEdit': {
         if (!l) break;
         var si = Number(el.getAttribute('data-i'));

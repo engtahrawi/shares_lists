@@ -67,6 +67,11 @@ function createBridge(ctx) {
         if (t && t !== cur.title) { v.title = t.slice(0, 200); v.title_locked = 1; }
       }
       if ('notes' in input) v.notes = String(input.notes || '').trim() || null;
+      if ('progress' in input) {
+        const pr = String(input.progress || '').trim().slice(0, 500);
+        v.progress = pr || null;
+        v.progress_at = pr ? Date.now() : null;
+      }
       if ('tags' in input) {
         const clean = [];
         for (const t of Array.isArray(input.tags) ? input.tags : []) {

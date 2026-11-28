@@ -35,7 +35,7 @@ final class Db extends SQLiteOpenHelper {
             "tags_locked", "action_locked", "page_title", "deadline_at", "deadline_has_time",
             "deadline_source", "deadline_locked", "remind_days", "reminded", "effort_days",
             "effort_locked", "steps", "steps_locked", "uid", "origin", "dirty", "countries",
-            "countries_locked", "ref_links"
+            "countries_locked", "ref_links", "progress", "progress_at"
     };
 
     /** Link fields shared with other devices (plus "collection" and "suggested_collection" uids). */
@@ -46,7 +46,7 @@ final class Db extends SQLiteOpenHelper {
             "site_name", "image_url", "analyzed_at", "title_locked", "tags_locked", "action_locked",
             "deadline_at", "deadline_has_time", "deadline_source", "deadline_locked", "remind_days",
             "effort_days", "effort_locked", "steps", "steps_locked", "origin", "countries",
-            "countries_locked", "ref_links"
+            "countries_locked", "ref_links", "progress", "progress_at"
     };
 
     /** Columns that never come from a backup file or another device as-is. */
@@ -63,7 +63,7 @@ final class Db extends SQLiteOpenHelper {
     private final Context app;
 
     private Db(Context context) {
-        super(context, "savemind.db", null, 5);
+        super(context, "savemind.db", null, 6);
         app = context;
     }
 
@@ -123,6 +123,7 @@ final class Db extends SQLiteOpenHelper {
         addPlanColumns(db);
         addSyncColumns(db);
         addCountryColumns(db);
+        addProgressColumns(db);
         db.execSQL("CREATE INDEX idx_links_norm ON links(normalized_url)");
         db.execSQL("CREATE INDEX idx_links_status ON links(status)");
         db.execSQL("CREATE TABLE analysis_runs ("
@@ -145,6 +146,13 @@ final class Db extends SQLiteOpenHelper {
         if (oldVersion < 3) addPlanColumns(db);
         if (oldVersion < 4) addSyncColumns(db);
         if (oldVersion < 5) addCountryColumns(db);
+        if (oldVersion < 6) addProgressColumns(db);
+    }
+
+    /** Version 6: the user's own note on where they are with an opportunity, and when it was written. */
+    private static void addProgressColumns(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE links ADD COLUMN progress TEXT");
+        db.execSQL("ALTER TABLE links ADD COLUMN progress_at INTEGER");
     }
 
     /**

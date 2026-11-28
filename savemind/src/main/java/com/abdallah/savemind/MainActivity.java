@@ -403,6 +403,12 @@ public class MainActivity extends Activity {
                     }
                 }
                 if (in.has("notes")) v.put("notes", Db.emptyToNull(in.optString("notes")));
+                if (in.has("progress")) {
+                    String pr = in.isNull("progress") ? "" : in.optString("progress").trim();
+                    if (pr.length() > 500) pr = pr.substring(0, 500);
+                    v.put("progress", Db.emptyToNull(pr));
+                    if (pr.isEmpty()) v.putNull("progress_at"); else v.put("progress_at", System.currentTimeMillis());
+                }
                 if (in.has("tags")) {
                     JSONArray tags = in.optJSONArray("tags");
                     JSONArray clean = new JSONArray();
