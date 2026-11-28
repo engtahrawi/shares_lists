@@ -37,6 +37,9 @@
     bookmark: '<svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M7 3h10a2 2 0 0 1 2 2v16l-7-3.8L5 21V5a2 2 0 0 1 2-2z"/></svg>',
     plusSm: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
     planner: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4M8 14h3M8 17h6"/></svg>',
+    grip: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>',
+    arrowUp: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>',
+    arrowDown: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
     chevron: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
     searchSm: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>',
     link: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>'
@@ -821,27 +824,79 @@
       + (p.steps.length ? '<div class="pbar"><div style="width:' + Math.round(100 * p.done / p.steps.length) + '%"></div></div>' : '')
       + '</div><span class="chev' + (open ? ' open' : '') + '">' + I.chevron + '</span></button>';
     if (open) {
-      h += '<div class="pbody"><div class="grid2">'
-        + '<button class="ptile" data-act="editEffort" data-id="' + l.id + '"><span class="src" style="font-weight:600">Work needed</span>'
-        + '<span class="pv">' + (p.known ? 'About ' + p.effort + ' day' + (p.effort === 1 ? '' : 's') : 'Not estimated') + '</span>'
-        + '<span class="src" style="font-size:11px">' + (l.effort_locked ? 'Set by you' : p.known ? 'Estimated by Claude' : 'Tap to set') + ' · Edit</span></button>'
-        + '<div class="ptile"><span class="src" style="font-weight:600">Start by</span><span class="pv">'
-        + (p.group === 'today' ? 'Today, ' + shortDate(Date.now()) : WEEKDAYS[new Date(p.startBy).getDay()].slice(0, 3) + ', ' + shortDate(p.startBy))
-        + '</span><span class="src" style="font-size:11px">Includes 1 buffer day</span></div></div>';
+      h += '<div class="pbody">';
       if (p.steps.length) {
-        h += '<div class="col" style="gap:0">' + p.steps.map(function (st, i) {
-          return '<div class="pstep' + (st.d ? ' done' : '') + '"><button class="pcheck' + (st.d ? ' on' : '') + '" data-act="stepToggle" data-id="' + l.id + '" data-i="' + i
+        var last = p.steps.length - 1;
+        h += '<div class="psteps" data-id="' + l.id + '">' + p.steps.map(function (st, i) {
+          return '<div class="pstep' + (st.d ? ' done' : '') + '" data-i="' + i + '">'
+            + '<span class="pgrip" data-i="' + i + '" title="Drag to reorder" aria-hidden="true">' + I.grip + '</span>'
+            + '<button class="pcheck' + (st.d ? ' on' : '') + '" data-act="stepToggle" data-id="' + l.id + '" data-i="' + i
             + '" role="checkbox" aria-checked="' + !!st.d + '" aria-label="' + esc(st.t) + '">' + (st.d ? '✓' : '') + '</button>'
-            + '<span class="grow" dir="auto">' + esc(st.t) + '</span>'
+            + '<button class="ptext grow" data-act="stepEdit" data-id="' + l.id + '" data-i="' + i + '" dir="auto" title="Edit step">' + esc(st.t) + '</button>'
+            + '<button class="pmove" data-act="stepUp" data-id="' + l.id + '" data-i="' + i + '" aria-label="Move up"' + (i === 0 ? ' disabled' : '') + '>' + I.arrowUp + '</button>'
+            + '<button class="pmove" data-act="stepDown" data-id="' + l.id + '" data-i="' + i + '" aria-label="Move down"' + (i === last ? ' disabled' : '') + '>' + I.arrowDown + '</button>'
             + '<button class="pdel" data-act="stepRemove" data-id="' + l.id + '" data-i="' + i + '" aria-label="Remove step">×</button></div>';
         }).join('') + '</div>';
       } else {
         h += '<p class="s">No preparation steps yet.' + (p.known ? '' : canAnalyze() ? ' Analyze again from the ⋯ menu, or add your own.' : ' Add your own.') + '</p>';
       }
-      h += '<button class="link" style="text-align:start" data-act="stepAdd" data-id="' + l.id + '">+ Add step</button></div>';
+      h += '<div class="row between wrap"><button class="link" style="text-align:start" data-act="stepAdd" data-id="' + l.id + '">+ Add step</button>'
+        + '<button class="link" style="color:var(--muted-2)" data-act="editEffort" data-id="' + l.id + '">Edit work estimate</button></div></div>';
     }
     return h + '</section>';
   }
+
+  /** Moves a preparation step to a new position and saves the order. */
+  function moveStep(l, from, to) {
+    var steps = stepsOf(l).map(function (x) { return { t: x.t, d: x.d ? 1 : 0 }; });
+    if (from < 0 || from >= steps.length || to < 0 || to >= steps.length || from === to) return;
+    var s = steps.splice(from, 1)[0];
+    steps.splice(to, 0, s);
+    l.steps = steps;
+    SM.setSteps(l.id, JSON.stringify(steps));
+    render(false);
+  }
+
+  // Drag a step by its handle (mouse or touch) to reorder it.
+  var stepDrag = null;
+  document.addEventListener('pointerdown', function (e) {
+    var grip = e.target.closest && e.target.closest('.pgrip');
+    if (!grip) return;
+    var list = grip.closest('.psteps');
+    var row = grip.closest('.pstep');
+    var l = linkById(Number(list.getAttribute('data-id')));
+    if (!l || !row) return;
+    e.preventDefault();
+    var rows = Array.prototype.slice.call(list.querySelectorAll('.pstep'));
+    stepDrag = { l: l, row: row, rows: rows, from: rows.indexOf(row), to: rows.indexOf(row), y0: e.clientY,
+      mids: rows.map(function (r) { var b = r.getBoundingClientRect(); return b.top + b.height / 2; }), h: row.getBoundingClientRect().height };
+    row.classList.add('dragging');
+    try { grip.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+  });
+  document.addEventListener('pointermove', function (e) {
+    if (!stepDrag) return;
+    var d = stepDrag, dy = e.clientY - d.y0;
+    d.row.style.transform = 'translateY(' + dy + 'px)';
+    var y = d.mids[d.from] + dy, to = 0;
+    for (var i = 0; i < d.mids.length; i++) if (i !== d.from && d.mids[i] < y) to++;
+    d.to = to;
+    d.rows.forEach(function (r, i) {
+      if (i === d.from) return;
+      var shift = 0;
+      if (d.from < to && i > d.from && i <= to) shift = -d.h;
+      if (d.from > to && i < d.from && i >= to) shift = d.h;
+      r.style.transform = shift ? 'translateY(' + shift + 'px)' : '';
+    });
+  });
+  function endStepDrag() {
+    if (!stepDrag) return;
+    var d = stepDrag;
+    stepDrag = null;
+    d.rows.forEach(function (r) { r.style.transform = ''; r.classList.remove('dragging'); });
+    if (d.to !== d.from) moveStep(d.l, d.from, d.to);
+  }
+  document.addEventListener('pointerup', endStepDrag);
+  document.addEventListener('pointercancel', endStepDrag);
 
   function levelChip(l) {
     if (l.status === 'processing') return '<span class="chip proc">Processing</span>';
@@ -874,7 +929,7 @@
     var chip = l.status === 'analyzed' || l.status === 'partial'
       ? '<span class="chip ' + levelClass(l) + '">' + esc(shortAction(l)) + '</span>'
       : levelChip(l);
-    return '<button class="card rowcard tap" data-act="open" data-id="' + l.id + '">' + thumb(l)
+    return '<button class="card rowcard tap" data-act="open" data-id="' + l.id + '">' + (hasDeadline(l) ? dateTile(l, false) : thumb(l))
       + '<div class="col grow"><p class="t clamp2" dir="auto">' + esc(titleOf(l)) + '</p>'
       + '<span class="src">' + esc(siteOf(l)) + ' · ' + esc(ago(l.saved_at))
       + (l.favorite ? ' · ♥' : '') + (l.archived ? ' · Archived' : '') + '</span></div>' + chip + '</button>';
@@ -1994,6 +2049,28 @@
         render(false);
         break;
       }
+      case 'stepUp': case 'stepDown': {
+        if (!l) break;
+        var from = Number(el.getAttribute('data-i'));
+        moveStep(l, from, act === 'stepUp' ? from - 1 : from + 1);
+        break;
+      }
+      case 'stepEdit': {
+        if (!l) break;
+        var si = Number(el.getAttribute('data-i'));
+        var cur = stepsOf(l)[si];
+        if (!cur) break;
+        promptSheet({ title: 'Edit step', value: cur.t, placeholder: 'Step', ok: 'Save' }, function (v) {
+          if (!v.trim()) { toast('A step needs some text. Use × to remove it.'); return; }
+          var steps = stepsOf(l).map(function (x) { return { t: x.t, d: x.d ? 1 : 0 }; });
+          if (!steps[si]) return;
+          steps[si].t = v.trim().slice(0, 200);
+          l.steps = steps;
+          SM.setSteps(id, JSON.stringify(steps));
+          render(false);
+        });
+        break;
+      }
       case 'stepAdd':
         promptSheet({ title: 'Add step', placeholder: 'e.g. Ask for a recommendation letter', ok: 'Add' }, function (v) {
           if (!v.trim() || !l) return;
@@ -2088,6 +2165,7 @@
 
   window.SMNative = {
     changed: function () {
+      if (stepDrag) return;
       load();
       if (web && !(S.account || {}).signedIn) { if (!typing()) render(false); return; }
       var route = current();

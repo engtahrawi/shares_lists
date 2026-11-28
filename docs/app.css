@@ -225,9 +225,9 @@ textarea.inp { height: auto; min-height: 96px; padding: 12px 14px; resize: none;
 .pbody { padding: 12px 14px 10px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; }
 .ptile { border: 0; background: var(--bg); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; text-align: start; }
 .ptile .pv { font-family: var(--display); font-size: 18px; font-weight: 700; }
-.pstep { display: flex; align-items: center; gap: 10px; min-height: 44px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.pstep { display: flex; align-items: center; gap: 6px; min-height: 44px; border-bottom: 1px solid var(--line); font-size: 14px; background: #fff; position: relative; }
 .pstep:last-child { border-bottom: 0; }
-.pstep.done .grow { color: var(--muted-2); text-decoration: line-through; }
+.pstep.done .ptext { color: var(--muted-2); text-decoration: line-through; }
 .pcheck { width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--line-2); background: #fff; color: #fff; font-size: 13px; font-weight: 800; display: flex; align-items: center; justify-content: center; padding: 0; flex: none; }
 .pcheck.on { background: var(--blue); border-color: var(--blue); }
 .pdel { border: 0; background: none; color: var(--muted-2); font-size: 20px; width: 32px; height: 32px; flex: none; }
@@ -341,3 +341,14 @@ body.web.desk #side { padding-top: 18px; }
 body.onboarding #view { width: 100%; }
 @media (max-width: 600px) { .lpitch { padding: 32px 24px; } .lhead { font-size: 30px; } .wbars, .wlabels { gap: 6px; } }
 .cpill:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+
+/* Editable, reorderable preparation steps */
+.psteps { display: flex; flex-direction: column; }
+.pgrip { width: 22px; height: 36px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--muted-2); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.pstep.dragging { z-index: 5; box-shadow: 0 6px 20px rgba(22,24,29,.16); border-radius: 10px; cursor: grabbing; }
+.pstep.dragging .pgrip { cursor: grabbing; }
+.ptext { border: 0; background: none; padding: 8px 4px; text-align: start; font: inherit; font-size: 14px; color: var(--ink); min-width: 0; overflow-wrap: anywhere; cursor: text; border-radius: 6px; margin-inline-start: 4px; }
+.ptext:hover { background: var(--bg); }
+.pmove { border: 0; background: none; color: var(--muted-2); width: 28px; height: 32px; flex: none; display: flex; align-items: center; justify-content: center; padding: 0; border-radius: 8px; }
+.pmove:hover:not([disabled]) { background: var(--bg); color: var(--ink); }
+.pmove[disabled] { opacity: .25; }
