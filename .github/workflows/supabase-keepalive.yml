@@ -32,6 +32,9 @@ jobs:
             code=$(curl -s -o /tmp/out -w '%{http_code}' --retry 3 --retry-delay 10 \
               -H "apikey: $KEY" "$URL$path")
             echo "$path -> HTTP $code"
+            # Without a signed-in user, row security refuses the read with Postgres error 42501.
+            # That answer comes from the database itself, so it proves the project is awake.
+            if grep -q '"42501"' /tmp/out; then echo "Database answered (access refused as expected)."; continue; fi
             if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
               cat /tmp/out; echo
               echo "::error::Supabase did not answer $path (HTTP $code). The project may be paused: restore it from the Supabase dashboard."
