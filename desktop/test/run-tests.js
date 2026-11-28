@@ -201,6 +201,37 @@ function device(url) {
     assert.strictEqual(l.origin, B.store.deviceId());
   });
 
+  await test('the Where I am note syncs, and an older app that omits it does not erase it', async () => {
+    const id = A.store.insertLink('https://example.org/progress', '', 'SaveMind', null);
+    A.store.updateLink(id, { status: 'analyzed', title: 'Progress test' });
+    A.store.updateLink(id, { progress: 'Sent emails, waiting for replies', progress_at: Date.now() });
+    await A.sync.syncNow();
+    await B.sync.syncNow();
+    const bl = B.store.allLinks().find((l) => l.title === 'Progress test');
+    assert.strictEqual(bl.progress, 'Sent emails, waiting for replies');
+    // An item pushed by an older app has no progress key at all.
+    const uid = bl.uid;
+    const old = { id: uid, kind: 'link', deleted: false, updated_at: Date.now() + 5000,
+      data: { url: 'https://example.org/progress', title: 'Progress test (edited on old phone)', status: 'analyzed' } };
+    B.store.applyRemote(old);
+    const after = B.store.allLinks().find((l) => l.uid === uid);
+    assert.strictEqual(after.title, 'Progress test (edited on old phone)');
+    assert.strictEqual(after.progress, 'Sent emails, waiting for replies');
+  });
+
+  await test('after updating from an older version, everything is downloaded once more', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sm-'));
+    fs.writeFileSync(path.join(dir, 'savemind-data.json'), JSON.stringify({ nextLinkId: 2, nextColId: 1, collections: [], tombstones: [], runs: [],
+      links: [{ id: 1, uid: 'u1', url: 'https://x.org', updated_at: 1000, dirty: 0 }, { id: 2, uid: 'u2', url: 'https://y.org', updated_at: 1000, dirty: 1 }],
+      prefs: { deviceId: 'd', lastSeq: 50 } }));
+    const s = new Store(dir, plain);
+    assert.strictEqual(s.prefs.lastSeq, 0);
+    assert.strictEqual(s.data.links[0].updated_at, 999);
+    assert.strictEqual(s.data.links[1].updated_at, 1000);
+    s.applyRemote({ id: 'u1', kind: 'link', deleted: false, updated_at: 1000, data: { url: 'https://x.org', progress: 'From the Mac' } });
+    assert.strictEqual(s.data.links[0].progress, 'From the Mac');
+  });
+
   srv.server.close();
   console.log(failures ? '\n' + failures + ' FAILED' : '\nall passed');
   process.exit(failures ? 1 : 0);

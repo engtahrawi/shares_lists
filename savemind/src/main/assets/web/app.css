@@ -352,8 +352,8 @@ body.onboarding #view { width: 100%; }
 
 /* Where I am */
 .progress { display: flex; align-items: center; gap: 12px; text-align: start; width: 100%; border: 0; border-radius: 16px; padding: 14px 16px; background: var(--blue-wash); border-inline-start: 4px solid var(--blue); font: inherit; color: var(--ink); cursor: pointer; }
-.progress.empty { background: #fff; border: 1.5px dashed var(--line-2); color: var(--blue); }
-.progress.empty svg { flex: none; }
+.progress.blank { background: #fff; border: 1.5px dashed var(--line-2); color: var(--blue); }
+.progress.blank svg { flex: none; }
 .progress .plabel { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--blue); }
 .progress .ptxt { font-size: 15px; font-weight: 600; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
 .pnow { font-size: 12px; color: var(--ink-2); background: var(--blue-wash); border-radius: 6px; padding: 3px 8px; align-self: flex-start; }

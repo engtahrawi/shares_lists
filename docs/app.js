@@ -897,7 +897,7 @@
   /** The user's own note on where they are with this link, shown at the top of its page. */
   function progressBlock(l) {
     if (!l.progress) {
-      return '<button class="progress empty" data-act="progressEdit" data-id="' + l.id + '">' + I.pin
+      return '<button class="progress blank" data-act="progressEdit" data-id="' + l.id + '">' + I.pin
         + '<span class="col grow" style="gap:2px"><span class="t" style="font-size:14px">Where are you with this?</span>'
         + '<span class="src">Note your last step, e.g. Sent emails, waiting for replies from supervisors</span></span></button>';
     }

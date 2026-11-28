@@ -75,6 +75,13 @@ class Store {
       if (!Array.isArray(l.ref_links)) l.ref_links = [];
       if (l.countries_locked == null) l.countries_locked = 0;
     }
+    if ((this.data.prefs.syncSchema || 0) < 7) {
+      // Fields added since (such as progress) may have been skipped by an older version when it
+      // downloaded them: download everything once more and let unchanged links take the server copy.
+      for (const l of this.data.links) if (!l.dirty && l.updated_at) l.updated_at -= 1;
+      this.data.prefs.lastSeq = 0;
+      this.data.prefs.syncSchema = 7;
+    }
     if (!this.data.prefs.deviceId) {
       this.data.prefs.deviceId = crypto.randomUUID();
       this.saveNow();
@@ -518,6 +525,7 @@ class Store {
     if (!data.url) return -1;
     const row = local || Object.assign(blankLink(), { id: this.data.nextLinkId++ });
     for (const f of SYNC_LINK_FIELDS) {
+      if (local && !(f in data)) continue; // sent by an older app that does not know this field
       let v = data[f];
       if (v === undefined || v === null) v = ['tags', 'steps', 'countries', 'ref_links'].includes(f) ? [] : INT_FIELDS.has(f) ? 0 : null;
       if (typeof v === 'boolean') v = v ? 1 : 0;

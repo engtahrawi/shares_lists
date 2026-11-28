@@ -63,7 +63,7 @@ final class Db extends SQLiteOpenHelper {
     private final Context app;
 
     private Db(Context context) {
-        super(context, "savemind.db", null, 6);
+        super(context, "savemind.db", null, 7);
         app = context;
     }
 
@@ -147,6 +147,13 @@ final class Db extends SQLiteOpenHelper {
         if (oldVersion < 4) addSyncColumns(db);
         if (oldVersion < 5) addCountryColumns(db);
         if (oldVersion < 6) addProgressColumns(db);
+        if (oldVersion < 7) {
+            // Fields added since (such as progress) may have been skipped by an older version of
+            // the app when it downloaded them. Download everything once more and let the server's
+            // copy of unchanged links replace the local one.
+            db.execSQL("UPDATE links SET updated_at = updated_at - 1 WHERE dirty = 0");
+            new Prefs(app).setLastSeq(0);
+        }
     }
 
     /** Version 6: the user's own note on where they are with an opportunity, and when it was written. */
@@ -973,6 +980,7 @@ final class Db extends SQLiteOpenHelper {
         }
 
         for (String f : SYNC_LINK_FIELDS) {
+            if (!data.has(f) && localId >= 0) continue; // sent by an older app that does not know this field
             if (!data.has(f) || data.isNull(f)) {
                 if (f.equals("tags") || f.equals("steps") || f.equals("countries") || f.equals("ref_links")) v.put(f, "[]");
                 else if (isNotNullInt(f)) v.put(f, 0);
